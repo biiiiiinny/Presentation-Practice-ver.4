@@ -28,6 +28,7 @@ interface SidebarProps {
   onNavigateToProfile: () => void;
   onNavigateToSettings: () => void;
   onLogout: () => void;
+  onRetry: (id: string) => void;
 }
 
 export function Sidebar({
@@ -41,7 +42,8 @@ export function Sidebar({
   onToggleFavorite,
   onNavigateToProfile,
   onNavigateToSettings,
-  onLogout
+  onLogout,
+  onRetry
 }: SidebarProps) {
   const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null);
 
@@ -177,6 +179,7 @@ export function Sidebar({
                 onToggleFavorite={() => onToggleFavorite(session.id)}
                 onHover={() => setHoveredSessionId(session.id)}
                 onLeave={() => setHoveredSessionId(null)}
+                onRetry={() => onRetry(session.id)}
               />
             ))}
           </div>
@@ -196,6 +199,7 @@ export function Sidebar({
                 onToggleFavorite={() => onToggleFavorite(session.id)}
                 onHover={() => setHoveredSessionId(session.id)}
                 onLeave={() => setHoveredSessionId(null)}
+                onRetry={() => onRetry(session.id)}
               />
             ))}
           </div>
@@ -215,6 +219,7 @@ export function Sidebar({
                 onToggleFavorite={() => onToggleFavorite(session.id)}
                 onHover={() => setHoveredSessionId(session.id)}
                 onLeave={() => setHoveredSessionId(null)}
+                onRetry={() => onRetry(session.id)}
               />
             ))}
           </div>
@@ -234,6 +239,7 @@ export function Sidebar({
                 onToggleFavorite={() => onToggleFavorite(session.id)}
                 onHover={() => setHoveredSessionId(session.id)}
                 onLeave={() => setHoveredSessionId(null)}
+                onRetry={() => onRetry(session.id)}
               />
             ))}
           </div>
@@ -285,6 +291,7 @@ interface SessionItemProps {
   onToggleFavorite: () => void;
   onHover: () => void;
   onLeave: () => void;
+  onRetry: () => void;
 }
 
 function SessionItem({
@@ -295,7 +302,8 @@ function SessionItem({
   onDelete,
   onToggleFavorite,
   onHover,
-  onLeave
+  onLeave,
+  onRetry
 }: SessionItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const hasMultipleAttempts = session.attempts && session.attempts.length > 1;
@@ -347,6 +355,18 @@ function SessionItem({
           
           {(isHovered || isActive) && (
             <>
+              {/* 재발표 버튼 */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRetry();
+                }}
+                className="p-1 hover:bg-slate-700 rounded transition-colors"
+                title="다시 연습하기"
+              >
+                <RotateCcw className="w-4 h-4 text-blue-400" />
+              </button>
+
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -371,6 +391,7 @@ function SessionItem({
               </button>
             </>
           )}
+
         </div>
       </div>
 

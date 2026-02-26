@@ -50,6 +50,7 @@ interface AppContextType {
   handleDeleteSession: (id: string) => void;
   handleToggleFavorite: (id: string) => void;
   handleNewPresentation: () => void;
+  handleRetry: (id: string) => void;
   addOrUpdateSession: (evaluation: Record<string, number>) => string;
 }
 
@@ -240,6 +241,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return targetSessionId; // 세션 ID 반환
   };
 
+  const handleRetry = (id: string) => {
+  const session = sessions.find(s => s.id === id);
+  if (session) {
+    setCurrentSessionId(id);
+    setCurrentFormData(session.formData); 
+    setSelfEvaluation(session.selfEvaluation || {});
+  }
+};
+
   const value: AppContextType = {
     isLoggedIn,
     setIsLoggedIn,
@@ -263,6 +273,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     handleDeleteSession,
     handleToggleFavorite,
     handleNewPresentation,
+    handleRetry,
     addOrUpdateSession
   };
 

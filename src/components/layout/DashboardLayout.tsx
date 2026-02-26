@@ -16,7 +16,8 @@ export function DashboardLayout() {
     handleSelectSession,
     handleDeleteSession,
     handleToggleFavorite,
-    handleNewPresentation
+    handleNewPresentation,
+    handleRetry
   } = useApp();
 
   const handleNavigateToProfile = () => {
@@ -39,6 +40,11 @@ export function DashboardLayout() {
     navigate(`/presentation/results/${id}`);
   };
 
+  const handleRetryClick = (id: string) => {
+    handleRetry(id);
+    navigate('/presentation/new');
+  };
+  
   const handleNewPresentationClick = () => {
     handleNewPresentation();
     navigate('/presentation/new');
@@ -58,6 +64,7 @@ export function DashboardLayout() {
         onNavigateToProfile={handleNavigateToProfile}
         onNavigateToSettings={handleNavigateToSettings}
         onLogout={handleLogout}
+        onRetry={handleRetryClick}
       />
       <div className="flex-1 overflow-auto flex flex-col">
         {/* 상단 네비게이션 바 */}
