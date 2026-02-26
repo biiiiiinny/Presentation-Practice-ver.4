@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Presentation, Mail, Lock, ArrowLeft, Eye, EyeOff } from 'lucide-react';
-import logoImage from 'figma:asset/5b3406e1c944ae03d11bbafa7f6386f049eba43f.png';
+import logoImage from '../assets/Logo_wang.png';
 
 interface LoginPageProps {
   onLogin: (email: string, password: string, rememberMe: boolean) => void;
@@ -14,6 +14,7 @@ export function LoginPage({ onLogin, onBack, initialEmail = '', initialPassword 
   const [password, setPassword] = useState(initialPassword);
   const [showPassword, setShowPassword] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  
   // 이전에 저장된 값이 있으면 "로그인 유지" 체크박스도 체크 상태로
   const [rememberMe, setRememberMe] = useState(!!initialEmail);
 
