@@ -1,5 +1,5 @@
 import { Presentation, TrendingUp, Eye, Mic, BarChart3, Sparkles, ChevronRight, User } from 'lucide-react';
-import logoImage from 'figma:asset/5b3406e1c944ae03d11bbafa7f6386f049eba43f.png';
+import logoImage from '../assets/Logo_wang.png';
 
 interface LandingPageProps {
   onGetStarted: () => void;
