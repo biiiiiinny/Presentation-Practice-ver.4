@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Presentation, Mail, Lock, ArrowLeft, Eye, EyeOff } from 'lucide-react';
-import logoImage from '../assets/Logo_wang.png';
 
 interface LoginPageProps {
   onLogin: (email: string, password: string, rememberMe: boolean) => void;
@@ -33,7 +32,7 @@ export function LoginPage({ onLogin, onBack, initialEmail = '', initialPassword 
         {/* 뒤로가기 버튼 */}
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors mb-8"
+          className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors mb-8 mt-16"
         >
           <ArrowLeft className="w-5 h-5" />
           <span>메인으로</span>
@@ -44,11 +43,9 @@ export function LoginPage({ onLogin, onBack, initialEmail = '', initialPassword 
           {/* 로고 */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center mb-4">
-              <img 
-                src={logoImage} 
-                alt="발표 연습 왕!" 
-                className="w-32 h-auto rounded-2xl border-4 border-blue-900"
-              />
+              <div className="w-20 h-20 bg-blue-900 rounded-2xl flex items-center justify-center shadow-xl">
+                <Presentation className="w-11 h-11 text-white" strokeWidth={2.5} />
+              </div>
             </div>
             <h1 className="text-2xl font-bold text-slate-900 mb-2">
               {isSignUp ? '회원가입' : '로그인'}
