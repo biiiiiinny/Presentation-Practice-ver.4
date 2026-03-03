@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Upload, Video, X, Presentation, Target, Users, Clock, MessageSquare, CheckCircle } from 'lucide-react';
 
 interface PresentationSetupProps {
@@ -11,10 +11,11 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [customCriteria, setCustomCriteria] = useState<Array<{ value: string; label: string }>>(
-    existingFormData?.customCriteria || []
-  );
-  const [newCriteriaLabel, setNewCriteriaLabel] = useState('');
+  const videoRef = useRef<HTMLDivElement>(null);
+  const topicRef = useRef<HTMLDivElement>(null);
+  const purposeRef = useRef<HTMLDivElement>(null);
+
+  const [errors, setErrors] = useState<{ video?: string; topic?: string; purpose?: string }>({});
 
   const [formData, setFormData] = useState({
     topic: existingFormData?.topic || '',
@@ -37,6 +38,21 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
     { value: 'logic', label: '논리성' },
     { value: 'delivery', label: '전달력' }
   ];
+
+  const [hiddenCriteria, setHiddenCriteria] = useState<string[]>([]);
+
+  // existingFormData가 변경될 때 formData를 리셋
+  useEffect(() => {
+    setFormData({
+      topic: existingFormData?.topic || '',
+      purpose: existingFormData?.purpose || '',
+      criteria: existingFormData?.criteria || {} as Record<string, number>,
+      audienceKnowledge: existingFormData?.audienceKnowledge || '',
+      timeLimit: existingFormData?.timeLimit || '',
+      feedbackTone: existingFormData?.feedbackTone || ''
+    });
+    setHiddenCriteria([]);
+  }, [existingFormData]);
 
   const knowledgeLevels = [
     { value: 'none', label: '없음', desc: '처음 듣는 주제' },
@@ -69,6 +85,7 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith('video/')) {
       setVideoFile(file);
+      setErrors(prev => ({ ...prev, video: undefined }));
     }
   };
 
@@ -76,6 +93,7 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
     const file = e.target.files?.[0];
     if (file) {
       setVideoFile(file);
+      setErrors(prev => ({ ...prev, video: undefined }));
     }
   };
 
@@ -90,19 +108,27 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!videoFile) {
-      alert('발표 영상을 업로드해주세요.');
+
+    const newErrors: { video?: string; topic?: string; purpose?: string } = {};
+    if (!videoFile) newErrors.video = '발표 영상을 필수로 첨부해주세요.';
+    if (!formData.topic.trim()) newErrors.topic = '발표 주제를 필수로 기입해주세요.';
+    if (!formData.purpose) newErrors.purpose = '발표 목적을 필수로 선택해주세요.';
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      // 첫 번째 에러 필드로 스크롤
+      if (newErrors.video) {
+        videoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (newErrors.topic) {
+        topicRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => topicRef.current?.querySelector('input')?.focus(), 400);
+      } else if (newErrors.purpose) {
+        purposeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       return;
     }
-    if (!formData.topic.trim()) {
-      alert('발표 주제를 입력해주세요.');
-      return;
-    }
-    if (!formData.purpose) {
-      alert('발표 목적을 선택해주세요.');
-      return;
-    }
-    
+
+    setErrors({});
     onSubmit({ ...formData, videoFile });
   };
 
@@ -121,12 +147,18 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
     return Object.values(formData.criteria).reduce((sum, score) => sum + score, 0);
   };
 
-  const addCustomCriteria = () => {
-    if (newCriteriaLabel.trim()) {
-      const newCriteria = { value: newCriteriaLabel.trim().toLowerCase().replace(/\s+/g, '_'), label: newCriteriaLabel.trim() };
-      setCustomCriteria(prev => [...prev, newCriteria]);
-      setNewCriteriaLabel('');
-    }
+  const removeBasicCriteria = (criterionValue: string) => {
+    // hiddenCriteria에 추가
+    setHiddenCriteria(prev => [...prev, criterionValue]);
+    // formData.criteria에서 해당 값 제거
+    setFormData(prev => {
+      const newCriteria = { ...prev.criteria };
+      delete newCriteria[criterionValue];
+      return {
+        ...prev,
+        criteria: newCriteria
+      };
+    });
   };
 
   return (
@@ -150,7 +182,7 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* 영상 업로드 */}
-          <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
+          <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200" ref={videoRef}>
             <div className="flex items-center gap-3 mb-4">
               <Video className="w-6 h-6 text-blue-600" />
               <h2 className="text-xl font-bold text-slate-900">발표 영상 업로드</h2>
@@ -166,6 +198,8 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
                   ? 'border-blue-500 bg-blue-50'
                   : videoFile
                   ? 'border-green-500 bg-green-50'
+                  : errors.video
+                  ? 'border-red-500 bg-red-50'
                   : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50'
               }`}
             >
@@ -199,7 +233,7 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
                 </div>
               ) : (
                 <div>
-                  <Upload className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+                  <Upload className={`w-12 h-12 mx-auto mb-3 ${errors.video ? 'text-red-400' : 'text-slate-400'}`} />
                   <p className="text-slate-700 font-semibold mb-1">
                     클릭하거나 파일을 드래그하여 업로드
                   </p>
@@ -209,13 +243,18 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
                 </div>
               )}
             </div>
+            {errors.video && (
+              <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                <span>⚠</span> {errors.video}
+              </p>
+            )}
           </div>
 
           {/* 발표 기본 정보 */}
           <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
             <div className="space-y-5">
               {/* 발표 주제 */}
-              <div>
+              <div ref={topicRef}>
                 <label className="block text-sm font-semibold text-slate-900 mb-2">
                   발표 주제 <span className="text-red-500">*</span>
                   {isRetry && <span className="ml-2 text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">이전 설정 유지</span>}
@@ -223,15 +262,25 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
                 <input
                   type="text"
                   value={formData.topic}
-                  onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, topic: e.target.value });
+                    if (errors.topic) setErrors(prev => ({ ...prev, topic: undefined }));
+                  }}
                   placeholder="예: 인공지능 기반 챗봇 서비스 개발"
                   disabled={isRetry}
-                  className={`w-full px-4 py-3 border border-slate-300 rounded-lg outline-none transition-all ${
+                  className={`w-full px-4 py-3 border rounded-lg outline-none transition-all ${
                     isRetry 
-                      ? 'bg-slate-100 text-slate-700 cursor-not-allowed' 
-                      : 'focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+                      ? 'bg-slate-100 text-slate-700 cursor-not-allowed border-slate-300' 
+                      : errors.topic
+                      ? 'border-red-500 focus:ring-2 focus:ring-red-300'
+                      : 'border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent'
                   }`}
                 />
+                {errors.topic && (
+                  <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                    <span>⚠</span> {errors.topic}
+                  </p>
+                )}
               </div>
 
               {/* 발표 유형 */}
@@ -245,22 +294,30 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
               </div>
 
               {/* 발표 목적 */}
-              <div>
+              <div ref={purposeRef}>
                 <label className="block text-sm font-semibold text-slate-900 mb-3">
-                  발표 목적 {isRetry && <span className="ml-2 text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">이전 설정 유지</span>}
+                  발표 목적 <span className="text-red-500">*</span>
+                  {isRetry && <span className="ml-2 text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">이전 설정 유지</span>}
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {purposes.map((purpose) => (
                     <button
                       key={purpose.value}
                       type="button"
-                      onClick={() => !isRetry && setFormData({ ...formData, purpose: purpose.value })}
+                      onClick={() => {
+                        if (!isRetry) {
+                          setFormData({ ...formData, purpose: purpose.value });
+                          if (errors.purpose) setErrors(prev => ({ ...prev, purpose: undefined }));
+                        }
+                      }}
                       disabled={isRetry}
                       className={`p-4 rounded-lg border-2 transition-all ${
                         formData.purpose === purpose.value
                           ? 'border-blue-500 bg-blue-50 shadow-md'
                           : isRetry
                           ? 'border-slate-200 bg-slate-100 cursor-not-allowed'
+                          : errors.purpose
+                          ? 'border-red-400 hover:border-red-500 hover:bg-red-50'
                           : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
                       }`}
                     >
@@ -271,6 +328,11 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
                     </button>
                   ))}
                 </div>
+                {errors.purpose && (
+                  <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                    <span>⚠</span> {errors.purpose}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -287,7 +349,9 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
               각 평가 기준의 비중을 입력하세요 (총합 100점, 입력하지 않으면 기본 기준 적용)
             </p>
             <div className="space-y-3 mb-4">
-              {criteriaOptions.map((option) => (
+              {criteriaOptions
+                .filter(option => !hiddenCriteria.includes(option.value))
+                .map((option) => (
                 <div key={option.value} className="flex items-center gap-3">
                   <label className="flex-1 text-sm font-medium text-slate-700">
                     {option.label}
@@ -307,56 +371,20 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
                     }`}
                   />
                   <span className="text-slate-600 text-sm w-6">점</span>
-                </div>
-              ))}
-              {customCriteria.map((option) => (
-                <div key={option.value} className="flex items-center gap-3">
-                  <label className="flex-1 text-sm font-medium text-slate-700">
-                    {option.label}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.criteria[option.value] || ''}
-                    onChange={(e) => handleCriteriaChange(option.value, e.target.value)}
-                    placeholder="0"
+                  <button
+                    type="button"
+                    onClick={() => removeBasicCriteria(option.value)}
                     disabled={isRetry}
-                    className={`w-20 px-3 py-2 border border-slate-300 rounded-lg outline-none text-center ${
+                    className={`px-3 py-2 border border-slate-300 rounded-lg text-sm transition-all ${
                       isRetry
-                        ? 'bg-slate-100 cursor-not-allowed'
-                        : 'focus:ring-2 focus:ring-purple-500 focus:border-transparent'
+                        ? 'bg-slate-100 cursor-not-allowed text-slate-400'
+                        : 'hover:bg-red-50 hover:border-red-300 hover:text-red-700'
                     }`}
-                  />
-                  <span className="text-slate-600 text-sm w-6">점</span>
+                  >
+                    삭제
+                  </button>
                 </div>
               ))}
-              <div className="flex items-center gap-3">
-                <input
-                  type="text"
-                  value={newCriteriaLabel}
-                  onChange={(e) => setNewCriteriaLabel(e.target.value)}
-                  placeholder="새 기준 추가"
-                  disabled={isRetry}
-                  className={`flex-1 px-4 py-3 border border-slate-300 rounded-lg outline-none transition-all ${
-                    isRetry
-                      ? 'bg-slate-100 cursor-not-allowed'
-                      : 'focus:ring-2 focus:ring-purple-500 focus:border-transparent'
-                  }`}
-                />
-                <button
-                  type="button"
-                  onClick={addCustomCriteria}
-                  disabled={isRetry}
-                  className={`px-4 py-3 border border-slate-300 rounded-lg outline-none transition-all ${
-                    isRetry
-                      ? 'bg-slate-100 cursor-not-allowed'
-                      : 'focus:ring-2 focus:ring-purple-500 focus:border-transparent'
-                  }`}
-                >
-                  추가
-                </button>
-              </div>
             </div>
             <div className={`p-3 rounded-lg text-center font-semibold ${
               getTotalScore() === 100 
