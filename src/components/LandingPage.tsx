@@ -1,5 +1,4 @@
 import { Presentation, TrendingUp, Eye, Mic, BarChart3, Sparkles, ChevronRight, User } from 'lucide-react';
-import logoImage from '../assets/Logo_wang.png';
 
 interface LandingPageProps {
   onGetStarted: () => void;
@@ -41,12 +40,8 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
           <div className="text-center">
             {/* 아이콘 */}
             <div className="inline-flex items-center justify-center mb-8">
-              <div className="relative">
-                <img 
-                  src={logoImage} 
-                  alt="발표 연습 왕!" 
-                  className="w-48 h-auto drop-shadow-2xl rounded-3xl border-4 border-blue-900"
-                />
+              <div className="relative w-24 h-24 bg-blue-900 rounded-3xl flex items-center justify-center shadow-2xl transform hover:scale-105 transition-transform">
+                <Presentation className="w-14 h-14 text-white" strokeWidth={2.5} />
               </div>
             </div>
 
