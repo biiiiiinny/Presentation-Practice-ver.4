@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { MyPage } from '../components/MyPage';
 import { useApp } from '../contexts/AppContext';
 

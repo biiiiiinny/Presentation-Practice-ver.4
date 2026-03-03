@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { LoginPage as LoginPageComponent } from '../components/LoginPage';
 import { useApp } from '../contexts/AppContext';
 

@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { LoadingAnalysis } from '../components/LoadingAnalysis';
 import { useApp } from '../contexts/AppContext';
 
