@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { PresentationSetup } from '../components/PresentationSetup';
 import { useApp } from '../contexts/AppContext';
 
@@ -9,7 +9,7 @@ export default function PresentationSetupPage() {
   const handleSubmit = (formData: any) => {
     console.log('발표 설정 제출:', formData);
     setCurrentFormData(formData);
-    navigate('/presentation/analyzing');
+    navigate('/presentation/self-evaluation');
   };
 
   return (
