@@ -1,6 +1,7 @@
 import { Outlet, useNavigate } from 'react-router';
 import { Sidebar } from '../Sidebar';
 import { useApp } from '../../contexts/AppContext';
+import { Notification } from '../../contexts/AppContext';
 import { Bell } from 'lucide-react';
 import { useState } from 'react';
 
@@ -20,7 +21,10 @@ export function DashboardLayout() {
     isAnalyzing,
     analysisProgress,
     currentPresentationTopic,
-    analysisCompleted
+    analysisCompleted,
+    notifications,
+    markNotificationAsRead,
+    clearAllNotifications,
   } = useApp();
 
   const handleNavigateToProfile = () => {
@@ -52,6 +56,22 @@ export function DashboardLayout() {
     navigate('/dashboard');
   };
 
+  const handleNotificationClick = (notification: Notification) => {
+    // 알림을 읽음 처리
+    markNotificationAsRead(notification.id);
+    // 알림 드롭다운 닫기
+    setShowNotifications(false);
+    // 해당 세션으로 이동
+    handleSelectSession(notification.sessionId);
+    navigate(`/presentation/results/${notification.sessionId}`);
+  };
+
+  const handleClearAllNotifications = () => {
+    if (confirm('모든 알림을 삭제하시겠습니까?')) {
+      clearAllNotifications();
+    }
+  };
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar
@@ -73,6 +93,9 @@ export function DashboardLayout() {
         analysisProgress={analysisProgress}
         currentPresentationTopic={currentPresentationTopic}
         analysisCompleted={analysisCompleted}
+        notifications={notifications}
+        onNotificationClick={handleNotificationClick}
+        onClearAllNotifications={handleClearAllNotifications}
       />
       <div className="flex-1 overflow-auto">
         <Outlet />

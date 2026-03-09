@@ -16,7 +16,7 @@ import {
   Bell,
   LayoutDashboard
 } from 'lucide-react';
-import { Session } from '../contexts/AppContext';
+import { Session, Notification } from '../contexts/AppContext';
 
 interface SidebarProps {
   sessions: Session[];
@@ -37,6 +37,9 @@ interface SidebarProps {
   analysisProgress: number;
   currentPresentationTopic: string;
   analysisCompleted: boolean;
+  notifications: Notification[];
+  onNotificationClick: (notification: Notification) => void;
+  onClearAllNotifications: () => void;
 }
 
 export function Sidebar({
@@ -58,12 +61,17 @@ export function Sidebar({
   analysisProgress,
   currentPresentationTopic,
   analysisCompleted,
+  notifications,
+  onNotificationClick,
+  onClearAllNotifications,
 }: SidebarProps) {
   const sortedSessions = [...sessions].sort((a, b) => {
     if (a.isFavorite && !b.isFavorite) return -1;
     if (!a.isFavorite && b.isFavorite) return 1;
     return new Date(b.date).getTime() - new Date(a.date).getTime();
   });
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
     <div 
@@ -197,65 +205,73 @@ export function Sidebar({
             <Bell className="w-5 h-5 flex-shrink-0" />
             {!isCollapsed && (
               <span className={`text-sm whitespace-nowrap transition-opacity duration-300 ${isCollapsed ? 'opacity-0' : 'opacity-100'}`}>
-                공지사항
+                알림
               </span>
             )}
-            {/* 알림 마크 (빨간 점) */}
-            <span className="absolute top-2 left-2 w-2 h-2 bg-red-500 rounded-full"></span>
+            {/* 알림 마크 (빨간 점) - 읽지 않은 알림이 있을 때만 표시 */}
+            {unreadCount > 0 && (
+              <span className="absolute top-2 left-2 w-2 h-2 bg-red-500 rounded-full"></span>
+            )}
           </button>
 
-          {/* 공지사항 드롭다운 */}
+          {/* 알림 드롭다운 */}
           {showNotifications && (
-            <div className={`absolute mb-2 w-96 bg-white rounded-lg shadow-xl border border-slate-200 z-50 text-slate-900 ${
+            <div className={`absolute mb-2 w-96 bg-white rounded-lg shadow-xl border border-slate-200 z-50 text-slate-900 ${ 
               isCollapsed
                 ? 'left-full top-0 ml-2'
                 : 'bottom-full left-0'
             }`}>
-              <div className="p-5 border-b border-slate-200">
-                <h3 className="text-lg font-bold text-slate-900">공지사항</h3>
+              <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+                <h3 className="text-lg font-bold text-slate-900">알림</h3>
+                {notifications.length > 0 && (
+                  <button 
+                    onClick={onClearAllNotifications}
+                    className="text-sm text-slate-500 hover:text-slate-700"
+                  >
+                    모두 지우기
+                  </button>
+                )}
               </div>
               <div className="max-h-96 overflow-y-auto">
-                <div className="p-5 hover:bg-slate-50 cursor-pointer border-b border-slate-100">
-                  <div className="flex items-start gap-3">
-                    <div className="w-2.5 h-2.5 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                    <div className="flex-1">
-                      <p className="text-base font-semibold text-slate-900 mb-1">새로운 피드백 기능 추가</p>
-                      <p className="text-sm text-slate-600 mb-2">
-                        발표 내용 분석 정확도가 향상되었습니다.
-                      </p>
-                      <p className="text-xs text-slate-400">2024년 2월 10일</p>
-                    </div>
+                {notifications.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <Bell className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                    <p className="text-sm text-slate-500">알림이 없습니다</p>
                   </div>
-                </div>
-                <div className="p-5 hover:bg-slate-50 cursor-pointer border-b border-slate-100">
-                  <div className="flex items-start gap-3">
-                    <div className="w-2.5 h-2.5 bg-slate-300 rounded-full mt-2 flex-shrink-0"></div>
-                    <div className="flex-1">
-                      <p className="text-base font-semibold text-slate-900 mb-1">시스템 점검 안내</p>
-                      <p className="text-sm text-slate-600 mb-2">
-                        2월 15일 새벽 2시~4시 시스템 점검이 진행됩니다.
-                      </p>
-                      <p className="text-xs text-slate-400">2024년 2월 8일</p>
+                ) : (
+                  notifications.map(notification => (
+                    <div 
+                      key={notification.id}
+                      className="p-5 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-b-0"
+                      onClick={() => onNotificationClick(notification)}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`w-2.5 h-2.5 rounded-full mt-2 flex-shrink-0 ${
+                          notification.isRead ? 'bg-slate-300' : 'bg-blue-500'
+                        }`}></div>
+                        <div className="flex-1">
+                          <p className={`text-base mb-1 ${
+                            notification.isRead ? 'text-slate-700' : 'font-semibold text-slate-900'
+                          }`}>
+                            {notification.title}
+                          </p>
+                          <p className="text-sm text-slate-600 mb-2">
+                            {notification.message}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            {new Date(notification.date).toLocaleString('ko-KR', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-                <div className="p-5 hover:bg-slate-50 cursor-pointer">
-                  <div className="flex items-start gap-3">
-                    <div className="w-2.5 h-2.5 bg-slate-300 rounded-full mt-2 flex-shrink-0"></div>
-                    <div className="flex-1">
-                      <p className="text-base font-semibold text-slate-900 mb-1">서비스 이용 가이드</p>
-                      <p className="text-sm text-slate-600 mb-2">
-                        효과적인 발표 연습을 위한 가이드를 확인하세요.
-                      </p>
-                      <p className="text-xs text-slate-400">2024년 2월 5일</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="p-4 border-t border-slate-200 text-center">
-                <button className="text-base text-blue-600 hover:text-blue-700 font-semibold">
-                  모두 보기
-                </button>
+                  ))
+                )}
               </div>
             </div>
           )}

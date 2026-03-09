@@ -20,6 +20,15 @@ export interface Session {
   videoUrl?: string;
 }
 
+export interface Notification {
+  id: string;
+  sessionId: string;
+  title: string;
+  message: string;
+  date: string;
+  isRead: boolean;
+}
+
 interface AppContextType {
   isLoggedIn: boolean;
   setIsLoggedIn: (value: boolean) => void;
@@ -55,6 +64,11 @@ interface AppContextType {
   startAnalysis: (topic: string) => void;
   completeSelfEvaluation: (evaluation: Record<string, number>) => void;
   completeAnalysis: () => void;
+  // 알림 관련
+  notifications: Notification[];
+  addNotification: (sessionId: string, title: string) => void;
+  markNotificationAsRead: (id: string) => void;
+  clearAllNotifications: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -72,6 +86,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentPresentationTopic, setCurrentPresentationTopic] = useState('');
   const [selfEvaluationCompleted, setSelfEvaluationCompleted] = useState(false);
   const [analysisCompleted, setAnalysisCompleted] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   // ─── Refs: 페이지 이동 후에도 유지 ───────────────────────────────────────
   const analysisIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -182,6 +197,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
           : s
       ));
+      // 재발표 알림 생성
+      addNotification(sessionId, formData?.topic || '발표');
     } else {
       const newId = Date.now().toString();
       const newSession: Session = {
@@ -197,6 +214,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
       setSessions(prev => [newSession, ...prev]);
       setCurrentSessionId(newId);
+      // 새 발표 알림 생성
+      addNotification(newId, formData?.topic || '새로운 발표');
     }
     setSelfEvaluation(evaluation);
   };
@@ -363,6 +382,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSelfEvaluation({});
   };
 
+  // ─── 알림 관련 함수 ───────────────────────────────────────────────────
+  const addNotification = (sessionId: string, title: string) => {
+    const newNotification: Notification = {
+      id: Date.now().toString(),
+      sessionId,
+      title,
+      message: '발표 분석이 완료되었습니다.',
+      date: new Date().toISOString(),
+      isRead: false
+    };
+    setNotifications(prev => [newNotification, ...prev]);
+  };
+
+  const markNotificationAsRead = (id: string) => {
+    setNotifications(prev => prev.map(n =>
+      n.id === id ? { ...n, isRead: true } : n
+    ));
+  };
+
+  const clearAllNotifications = () => {
+    setNotifications([]);
+  };
+
   const value: AppContextType = {
     isLoggedIn,
     setIsLoggedIn,
@@ -400,6 +442,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     startAnalysis,
     completeSelfEvaluation,
     completeAnalysis,
+    notifications,
+    addNotification,
+    markNotificationAsRead,
+    clearAllNotifications,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
