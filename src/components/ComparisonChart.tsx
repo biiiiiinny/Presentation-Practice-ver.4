@@ -1,6 +1,8 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useMemo } from 'react';
 
 interface ComparisonData {
+  id?: string;
   category: string;
   self: number;
   ai: number;
@@ -10,7 +12,54 @@ interface ComparisonChartProps {
   data: ComparisonData[];
 }
 
+// 등급 변환 함수
+const getRatingLabel = (value: number): string => {
+  if (value === 5) return '최상';
+  if (value === 4) return '상';
+  if (value === 3) return '중';
+  if (value === 2) return '하';
+  if (value === 1) return '최하';
+  return '';
+};
+
+// 커스텀 툴팁 컴포넌트
+const CustomTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white p-3 border border-slate-200 rounded-lg shadow-lg">
+        <p className="font-semibold text-slate-900 mb-2">{payload[0].payload.category}</p>
+        {payload.map((entry: any, index: number) => (
+          <div key={index} className="flex items-center gap-2">
+            <div 
+              className="w-3 h-3 rounded-full" 
+              style={{ backgroundColor: entry.color }}
+            />
+            <span className="text-sm text-slate-700">
+              {entry.name}: <span className="font-semibold">{getRatingLabel(entry.value)}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
+// Y축 라벨 포매터
+const yAxisFormatter = (value: number): string => {
+  return getRatingLabel(value);
+};
+
 export function ComparisonChart({ data }: ComparisonChartProps) {
+  // 각 데이터 항목에 고유 id 추가 (없을 경우에만)
+  const chartData = useMemo(() => 
+    data.map((item, index) => ({
+      ...item,
+      id: item.id || `${item.category}-${index}`
+    })),
+    [data]
+  );
+
   return (
     <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
       <div className="mb-4">
@@ -20,7 +69,11 @@ export function ComparisonChart({ data }: ComparisonChartProps) {
       </div>
       
       <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+        <BarChart 
+          data={chartData} 
+          margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+          barCategoryGap="20%"
+        >
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
           <XAxis 
             dataKey="category" 
@@ -28,18 +81,14 @@ export function ComparisonChart({ data }: ComparisonChartProps) {
             axisLine={{ stroke: '#cbd5e1' }}
           />
           <YAxis 
-            domain={[0, 100]}
-            tick={{ fill: '#64748b', fontSize: 14 }}
+            domain={[0, 6]}
+            ticks={[1, 2, 3, 4, 5]}
+            tickFormatter={yAxisFormatter}
+            tick={{ fill: '#64748b', fontSize: 12 }}
             axisLine={{ stroke: '#cbd5e1' }}
+            allowDataOverflow={false}
           />
-          <Tooltip 
-            contentStyle={{ 
-              backgroundColor: 'white', 
-              border: '1px solid #e2e8f0',
-              borderRadius: '8px',
-              boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-            }}
-          />
+          <Tooltip content={<CustomTooltip />} />
           <Legend 
             wrapperStyle={{ paddingTop: '20px' }}
             iconType="circle"
@@ -49,14 +98,16 @@ export function ComparisonChart({ data }: ComparisonChartProps) {
             fill="#8b5cf6" 
             name="자기평가" 
             radius={[8, 8, 0, 0]}
-            maxBarSize={60}
+            barSize={50}
+            isAnimationActive={false}
           />
           <Bar 
             dataKey="ai" 
             fill="#3b82f6" 
             name="AI 평가" 
             radius={[8, 8, 0, 0]}
-            maxBarSize={60}
+            barSize={50}
+            isAnimationActive={false}
           />
         </BarChart>
       </ResponsiveContainer>

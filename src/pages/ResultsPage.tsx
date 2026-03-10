@@ -77,12 +77,19 @@ export default function ResultsPage() {
 
   // 자기평가 vs AI 평가 비교 데이터
   const evaluation = currentSession.selfEvaluation || selfEvaluation;
-  const comparisonData = useMemo(() => [
-    { category: '시선', self: (evaluation.eyeContact || 3) * 20, ai: 85 },
-    { category: '음성', self: (evaluation.voice || 4) * 20, ai: 78 },
-    { category: '자세', self: (evaluation.posture || 4) * 20, ai: 92 },
-    { category: '내용', self: (evaluation.content || 5) * 20, ai: 88 }
-  ], [evaluation.eyeContact, evaluation.voice, evaluation.posture, evaluation.content]);
+  const comparisonData = useMemo(() => {
+    const eyeContact = evaluation?.eyeContact || 3;
+    const voice = evaluation?.voice || 4;
+    const posture = evaluation?.posture || 4;
+    const content = evaluation?.content || 5;
+    
+    return [
+      { id: 'eye-contact', category: '시선', self: eyeContact, ai: 4 },
+      { id: 'voice', category: '음성', self: voice, ai: 4 },
+      { id: 'posture', category: '자세', self: posture, ai: 5 },
+      { id: 'content', category: '내용', self: content, ai: 4 }
+    ];
+  }, [evaluation]);
 
   // 타임라인 클릭 시 비디오 시간 이동
   const handleTimelineClick = (timeString: string) => {

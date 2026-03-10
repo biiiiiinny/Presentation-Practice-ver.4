@@ -111,32 +111,6 @@ export function Timeline({ data, onTimeClick }: TimelineProps) {
           </div>
         </div>
       ))}
-
-      {/* 범례 */}
-      <div className="mt-6 pt-4 border-t border-slate-200">
-        <div className="flex flex-wrap gap-3 text-xs">
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-green-500"></div>
-            <span className="text-slate-600">최상</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
-            <span className="text-slate-600">상</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-yellow-500"></div>
-            <span className="text-slate-600">중</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-orange-500"></div>
-            <span className="text-slate-600">하</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
-            <span className="text-slate-600">최하</span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
