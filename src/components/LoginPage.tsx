@@ -1,29 +1,62 @@
 import { useState } from 'react';
-import { Presentation, Mail, Lock, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { Presentation, Mail, Lock, ArrowLeft, Eye, EyeOff, User } from 'lucide-react';
 
 interface LoginPageProps {
   onLogin: (email: string, password: string, rememberMe: boolean) => void;
+  onSignUp?: (email: string, password: string, nickname: string) => void;
   onBack: () => void;
   initialEmail?: string;
   initialPassword?: string;
 }
 
-export function LoginPage({ onLogin, onBack, initialEmail = '', initialPassword = '' }: LoginPageProps) {
+export function LoginPage({ onLogin, onSignUp, onBack, initialEmail = '', initialPassword = '' }: LoginPageProps) {
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState(initialPassword);
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [nickname, setNickname] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
-  
   // 이전에 저장된 값이 있으면 "로그인 유지" 체크박스도 체크 상태로
   const [rememberMe, setRememberMe] = useState(!!initialEmail);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (!email || !password) {
       alert('이메일과 비밀번호를 입력해주세요.');
       return;
     }
-    onLogin(email, password, rememberMe); // rememberMe 전달
+
+    if (isSignUp) {
+      // 회원가입 유효성 검사
+      if (!nickname.trim()) {
+        alert('별명을 입력해주세요.');
+        return;
+      }
+      if (password.length < 6) {
+        alert('비밀번호는 최소 6자 이상이어야 합니다.');
+        return;
+      }
+      if (password !== passwordConfirm) {
+        alert('비밀번호가 일치하지 않습니다.');
+        return;
+      }
+      if (onSignUp) {
+        onSignUp(email, password, nickname);
+      }
+    } else {
+      // 로그인
+      onLogin(email, password, rememberMe);
+    }
+  };
+
+  const handleToggleMode = () => {
+    setIsSignUp(!isSignUp);
+    // 모드 전환 시 입력 필드 초기화
+    setPassword('');
+    setPasswordConfirm('');
+    setNickname('');
   };
 
   return (
@@ -74,6 +107,25 @@ export function LoginPage({ onLogin, onBack, initialEmail = '', initialPassword 
               </div>
             </div>
 
+            {/* 별명 (회원가입 시만 표시) */}
+            {isSignUp && (
+              <div>
+                <label className="block text-sm font-semibold text-slate-900 mb-2">
+                  별명
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value)}
+                    placeholder="사용할 별명을 입력하세요"
+                    className="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* 비밀번호 */}
             <div>
               <label className="block text-sm font-semibold text-slate-900 mb-2">
@@ -101,6 +153,42 @@ export function LoginPage({ onLogin, onBack, initialEmail = '', initialPassword 
                 </button>
               </div>
             </div>
+
+            {/* 비밀번호 확인 (회원가입 시만 표시) */}
+            {isSignUp && (
+              <div>
+                <label className="block text-sm font-semibold text-slate-900 mb-2">
+                  비밀번호 확인
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type={showPasswordConfirm ? 'text' : 'password'}
+                    value={passwordConfirm}
+                    onChange={(e) => setPasswordConfirm(e.target.value)}
+                    placeholder="비밀번호를 다시 입력하세요"
+                    className="w-full pl-11 pr-11 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    {showPasswordConfirm ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+                {/* 비밀번호 일치 여부 표시 */}
+                {passwordConfirm && (
+                  <p className={`text-sm mt-1 ${password === passwordConfirm ? 'text-green-600' : 'text-red-600'}`}>
+                    {password === passwordConfirm ? '✓ 비밀번호가 일치합니다' : '✗ 비밀번호가 일치하지 않습니다'}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* 비밀번호 찾기 / 기억하기 */}
             {!isSignUp && (
@@ -174,7 +262,7 @@ export function LoginPage({ onLogin, onBack, initialEmail = '', initialPassword 
               {isSignUp ? '이미 계정이 있으신가요?' : '계정이 없으신가요?'}{' '}
               <button
                 type="button"
-                onClick={() => setIsSignUp(!isSignUp)}
+                onClick={handleToggleMode}
                 className="text-blue-600 hover:text-blue-700 font-semibold"
               >
                 {isSignUp ? '로그인' : '회원가입'}

@@ -43,12 +43,41 @@ export default function LoginPage() {
     navigate('/dashboard', { replace: true }); // 로그인 페이지를 히스토리에서 제거
   };
 
+  const handleSignUp = async (email: string, password: string, nickname: string) => {
+    // 실제로는 백엔드 API 호출
+    console.log('회원가입:', email, password, '별명:', nickname);
+    
+    // TODO: 실제 API 연결 시 아래와 같이 구현
+    // try {
+    //   const response = await fetch('/api/auth/signup', {
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify({ email, password, nickname })
+    //   });
+    //   
+    //   if (response.ok) {
+    //     alert('회원가입이 완료되었습니다. 로그인해주세요.');
+    //     // 회원가입 후 로그인 모드로 전환하도록 LoginPageComponent에서 처리
+    //   } else {
+    //     const error = await response.json();
+    //     alert(error.message || '회원가입에 실패했습니다.');
+    //   }
+    // } catch (error) {
+    //   console.error('회원가입 오류:', error);
+    //   alert('회원가입 중 오류가 발생했습니다.');
+    // }
+
+    // 임시 회원가입 처리
+    alert(`회원가입이 완료되었습니다!\n별명: ${nickname}\n이메일: ${email}\n로그인해주세요.`);
+  };
+
   const handleBack = () => {
     navigate('/');
   };
 
   return <LoginPageComponent 
-    onLogin={handleLogin} 
+    onLogin={handleLogin}
+    onSignUp={handleSignUp}
     onBack={handleBack}
     initialEmail={savedLoginEmail}
     initialPassword={savedLoginPassword}
