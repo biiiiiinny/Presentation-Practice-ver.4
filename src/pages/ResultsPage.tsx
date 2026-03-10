@@ -1,16 +1,16 @@
 import { useNavigate, useParams } from 'react-router';
 import { useApp } from '../contexts/AppContext';
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { Timeline } from '../components/Timeline';
 import { ComparisonChart } from '../components/ComparisonChart';
-import { Eye, Mic, User, CheckCircle, AlertCircle } from 'lucide-react';
+import { Mic, User, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function ResultsPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { sessions, selfEvaluation, setCurrentSessionId } = useApp();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [activeTab, setActiveTab] = useState<'overall' | 'eye' | 'voice' | 'posture'>('overall');
+  const [activeTab, setActiveTab] = useState<'overall' | 'voice' | 'posture'>('overall');
 
   const currentSession = sessions.find(s => s.id === id);
 
@@ -36,16 +36,15 @@ export default function ResultsPage() {
     );
   }
 
+  // 타임라인 데이터 - 스크립트 기반 발표 내용 구조만
   const timelineData = [
-    { time: '0:00', event: '발표 시작', type: 'start', confidence: 95 },
-    { time: '0:30', event: '도입부 - 주제 소개', type: 'good', confidence: 90 },
-    { time: '1:45', event: '본론 1 - 문제 정의', type: 'good', confidence: 88 },
-    { time: '3:20', event: '시선 분산 감지', type: 'warning', confidence: 65 },
-    { time: '4:10', event: '본론 2 - 해결방안', type: 'good', confidence: 85 },
-    { time: '5:30', event: '말속도 빠름 감지', type: 'warning', confidence: 70 },
-    { time: '6:45', event: '본론 3 - 기대효과', type: 'good', confidence: 92 },
-    { time: '8:00', event: '결론 및 마무리', type: 'excellent', confidence: 95 },
-    { time: '8:30', event: '발표 종료', type: 'end', confidence: 93 }
+    { time: '0:00', event: '발표 시작', type: 'start' as const },
+    { time: '0:30', event: '도입부 - 주제 소개', type: 'content' as const, rating: '상' as const },
+    { time: '1:45', event: '본론 1 - 문제 정의', type: 'content' as const, rating: '상' as const },
+    { time: '4:10', event: '본론 2 - 해결방안', type: 'content' as const, rating: '중' as const },
+    { time: '6:45', event: '본론 3 - 기대효과', type: 'content' as const, rating: '최상' as const },
+    { time: '8:00', event: '결론 및 마무리', type: 'content' as const, rating: '최상' as const },
+    { time: '8:30', event: '발표 종료', type: 'end' as const }
   ];
 
   // Mock 스크립트 데이터
@@ -60,19 +59,11 @@ export default function ResultsPage() {
     },
     {
       time: '1:45',
-      text: '문제 정의부터 시작하겠습니다. 효과적인 발표를 위해서는 시선 처리, 음성 톤, 자세 등 다양한 요소가 필요합니다.'
-    },
-    {
-      time: '3:20',
-      text: '하지만 이러한 요소들을 스스로 파악하고 개선하기는 어렵습니다.'
+      text: '문제 정부터 시작하겠습니다. 효과적인 발표를 위해서는 시선 처리, 음성 톤, 자세 등 다양한 요소가 필요합니다.'
     },
     {
       time: '4:10',
       text: '우리의 해결방안은 AI를 활용한 실시간 분석입니다. 사용자의 발표 영상을 업로드하면 자동으로 분석이 진행됩니다.'
-    },
-    {
-      time: '5:30',
-      text: '시선 처리, 음성 분석, 자세 분석, 그리고 발표 내용까지 종합적으로 평가합니다.'
     },
     {
       time: '6:45',
@@ -86,12 +77,12 @@ export default function ResultsPage() {
 
   // 자기평가 vs AI 평가 비교 데이터
   const evaluation = currentSession.selfEvaluation || selfEvaluation;
-  const comparisonData = [
+  const comparisonData = useMemo(() => [
     { category: '시선', self: (evaluation.eyeContact || 3) * 20, ai: 85 },
     { category: '음성', self: (evaluation.voice || 4) * 20, ai: 78 },
     { category: '자세', self: (evaluation.posture || 4) * 20, ai: 92 },
     { category: '내용', self: (evaluation.content || 5) * 20, ai: 88 }
-  ];
+  ], [evaluation.eyeContact, evaluation.voice, evaluation.posture, evaluation.content]);
 
   // 타임라인 클릭 시 비디오 시간 이동
   const handleTimelineClick = (timeString: string) => {
@@ -119,8 +110,8 @@ export default function ResultsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
                 <h3 className="text-sm font-semibold text-blue-900 mb-2">평균 발화 속도</h3>
-                <p className="text-2xl font-bold text-blue-900">180 <span className="text-sm font-normal">단어/분</span></p>
-                <p className="text-xs text-blue-700 mt-1">권장: 150단어/분</p>
+                <p className="text-2xl font-bold text-blue-900">360 <span className="text-sm font-normal">글자/분</span></p>
+                <p className="text-xs text-blue-700 mt-1">권장: 300글자/분</p>
               </div>
               <div className="bg-green-50 rounded-lg p-4 border border-green-100">
                 <h3 className="text-sm font-semibold text-green-900 mb-2">정면 응시 비율</h3>
@@ -189,43 +180,6 @@ export default function ResultsPage() {
           </div>
         );
 
-      case 'eye':
-        return (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-                <Eye className="w-6 h-6 text-blue-700" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">시선 처리</h3>
-                <p className="text-sm text-slate-600">점수: 85점</p>
-              </div>
-            </div>
-
-            <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-              <h4 className="font-semibold text-slate-900 mb-2">분석 결과</h4>
-              <p className="text-sm text-slate-700 leading-relaxed">
-                전반적으로 청중과 좋은 아이컨택을 유지했습니다. 다만, 발표 중반부(3-5분)에 
-                슬라이드를 자주 보는 경향이 있었습니다. 정면 응시 비율은 78%로 양호한 편입니다.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <h4 className="font-semibold text-slate-900">개선 제안</h4>
-              {[
-                '슬라이드 내용을 더 숙지하여 자신감 있게 청중을 바라보세요',
-                '청중의 여러 방향을 골고루 응시하는 것이 좋습니다',
-                '3-5분 구간에서 시선 처리에 더 집중하세요'
-              ].map((suggestion, idx) => (
-                <div key={idx} className="flex items-start gap-2 bg-blue-50 rounded-lg p-3 border border-blue-100">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-600 mt-2 flex-shrink-0" />
-                  <p className="text-sm text-blue-900">{suggestion}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-
       case 'voice':
         return (
           <div className="space-y-4">
@@ -235,17 +189,53 @@ export default function ResultsPage() {
               </div>
               <div>
                 <h3 className="text-lg font-bold text-slate-900">음성 분석</h3>
-                <p className="text-sm text-slate-600">점수: 78점</p>
+                <span className="inline-block px-3 py-1 bg-blue-500 text-white rounded text-sm font-semibold mt-1">
+                  상
+                </span>
               </div>
             </div>
 
-            <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-              <h4 className="font-semibold text-slate-900 mb-2">분석 결과</h4>
-              <p className="text-sm text-slate-700 leading-relaxed">
-                음량과 발음은 명확했으나, 말하는 속도가 다소 빠른 편입니다. 
-                평균 속도는 분당 180단어로, 권장 속도(150단어)보다 빠릅니다. 
-                전반적인 톤과 강약 조절은 적절했습니다.
-              </p>
+            {/* 5가지 평가 항목 */}
+            <div className="space-y-3">
+              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="text-sm font-semibold text-slate-900">발음 명확도</h4>
+                  <span className="px-2 py-0.5 bg-green-500 text-white rounded text-xs font-semibold">최상</span>
+                </div>
+                <p className="text-xs text-slate-600">발음이 명확하고 정확합니다</p>
+              </div>
+              
+              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="text-sm font-semibold text-slate-900">음량 적절성</h4>
+                  <span className="px-2 py-0.5 bg-green-500 text-white rounded text-xs font-semibold">최상</span>
+                </div>
+                <p className="text-xs text-slate-600">적절한 음량을 유지했습니다</p>
+              </div>
+              
+              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="text-sm font-semibold text-slate-900">말하기 속도</h4>
+                  <span className="px-2 py-0.5 bg-yellow-500 text-white rounded text-xs font-semibold">중</span>
+                </div>
+                <p className="text-xs text-slate-600">분당 360자로 다소 빠른 편입니다 (권장: 300자)</p>
+              </div>
+              
+              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="text-sm font-semibold text-slate-900">톤 변화</h4>
+                  <span className="px-2 py-0.5 bg-blue-500 text-white rounded text-xs font-semibold">상</span>
+                </div>
+                <p className="text-xs text-slate-600">적절한 톤 변화로 생동감 있는 발표</p>
+              </div>
+              
+              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="text-sm font-semibold text-slate-900">강약 조절</h4>
+                  <span className="px-2 py-0.5 bg-blue-500 text-white rounded text-xs font-semibold">상</span>
+                </div>
+                <p className="text-xs text-slate-600">중요한 부분에서 강조를 잘 활용했습니다</p>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -253,7 +243,7 @@ export default function ResultsPage() {
               {[
                 '중요한 내용은 천천히 강조하며 말하세요',
                 '문장 사이에 자연스러운 쉼을 두세요',
-                '발화 속도를 분당 150단어 수준으로 조절하세요'
+                '발화 속도를 분당 300자 수준으로 조절하세요'
               ].map((suggestion, idx) => (
                 <div key={idx} className="flex items-start gap-2 bg-purple-50 rounded-lg p-3 border border-purple-100">
                   <div className="w-1.5 h-1.5 rounded-full bg-purple-600 mt-2 flex-shrink-0" />
@@ -272,18 +262,54 @@ export default function ResultsPage() {
                 <User className="w-6 h-6 text-green-700" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-900">자세 및 제스처</h3>
-                <p className="text-sm text-slate-600">점수: 92점</p>
+                <h3 className="text-lg font-bold text-slate-900">자세 및 응시</h3>
+                <span className="inline-block px-3 py-1 bg-green-500 text-white rounded text-sm font-semibold mt-1">
+                  최상
+                </span>
               </div>
             </div>
 
-            <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-              <h4 className="font-semibold text-slate-900 mb-2">분석 결과</h4>
-              <p className="text-sm text-slate-700 leading-relaxed">
-                안정적인 자세를 유지했고, 제스처를 효과적으로 사용했습니다. 
-                자연스러운 손동작이 발표에 생동감을 더했으며, 전반적으로 자신감 있는 
-                몸동작이 관찰되었습니다.
-              </p>
+            {/* 5가지 평가 항목 */}
+            <div className="space-y-3">
+              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="text-sm font-semibold text-slate-900">자세 안정성</h4>
+                  <span className="px-2 py-0.5 bg-green-500 text-white rounded text-xs font-semibold">최상</span>
+                </div>
+                <p className="text-xs text-slate-600">안정적인 자세를 유지했습니다</p>
+              </div>
+              
+              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="text-sm font-semibold text-slate-900">제스처 활용</h4>
+                  <span className="px-2 py-0.5 bg-green-500 text-white rounded text-xs font-semibold">최상</span>
+                </div>
+                <p className="text-xs text-slate-600">효과적인 제스처와 손동작 활용</p>
+              </div>
+              
+              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="text-sm font-semibold text-slate-900">정면 응시 비율</h4>
+                  <span className="px-2 py-0.5 bg-blue-500 text-white rounded text-xs font-semibold">상</span>
+                </div>
+                <p className="text-xs text-slate-600">78% 정면 응시 (권장: 70% 이상)</p>
+              </div>
+              
+              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="text-sm font-semibold text-slate-900">시선 분산</h4>
+                  <span className="px-2 py-0.5 bg-blue-500 text-white rounded text-xs font-semibold">상</span>
+                </div>
+                <p className="text-xs text-slate-600">청중의 여러 방향을 적절히 응시</p>
+              </div>
+              
+              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="text-sm font-semibold text-slate-900">자신감 표현</h4>
+                  <span className="px-2 py-0.5 bg-green-500 text-white rounded text-xs font-semibold">최상</span>
+                </div>
+                <p className="text-xs text-slate-600">자신감 있는 몸동작이 관찰됨</p>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -335,9 +361,31 @@ export default function ResultsPage() {
           {/* 왼쪽 하단: 타임라인 */}
           <div className="bg-white rounded-xl shadow-lg overflow-hidden flex flex-col flex-1 min-h-0">
             <div className="px-4 py-2.5 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-4">
                 <h2 className="text-base font-bold text-slate-900">타임라인</h2>
-                <span className="text-xs text-slate-500">클릭 시 해당 시점 이동</span>
+                {/* 범례 */}
+                <div className="flex items-center gap-2 text-xs">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                    <span className="text-slate-600">최상</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                    <span className="text-slate-600">상</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                    <span className="text-slate-600">중</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                    <span className="text-slate-600">하</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                    <span className="text-slate-600">최하</span>
+                  </div>
+                </div>
               </div>
               <button
                 onClick={handleRetry}
@@ -368,17 +416,6 @@ export default function ResultsPage() {
               }`}
             >
               종합
-            </button>
-            <button
-              onClick={() => setActiveTab('eye')}
-              className={`flex-1 px-4 py-3 font-semibold text-sm transition-colors flex items-center justify-center gap-2 ${
-                activeTab === 'eye'
-                  ? 'text-blue-900 border-b-2 border-blue-900 bg-blue-50'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-              }`}
-            >
-              <Eye className="w-4 h-4" />
-              시선
             </button>
             <button
               onClick={() => setActiveTab('voice')}

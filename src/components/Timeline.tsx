@@ -1,10 +1,10 @@
-import { CheckCircle, AlertTriangle, Star, Play, StopCircle } from 'lucide-react';
+import { Play, StopCircle, FileText } from 'lucide-react';
 
 interface TimelineEvent {
   time: string;
   event: string;
-  type: 'start' | 'good' | 'excellent' | 'warning' | 'end';
-  confidence: number;
+  type: 'start' | 'content' | 'end';
+  rating?: '최하' | '하' | '중' | '상' | '최상';
 }
 
 interface TimelineProps {
@@ -17,16 +17,12 @@ export function Timeline({ data, onTimeClick }: TimelineProps) {
     switch (type) {
       case 'start':
         return <Play className="w-4 h-4" />;
-      case 'excellent':
-        return <Star className="w-4 h-4" />;
-      case 'good':
-        return <CheckCircle className="w-4 h-4" />;
-      case 'warning':
-        return <AlertTriangle className="w-4 h-4" />;
       case 'end':
         return <StopCircle className="w-4 h-4" />;
+      case 'content':
+        return <FileText className="w-4 h-4" />;
       default:
-        return <CheckCircle className="w-4 h-4" />;
+        return <FileText className="w-4 h-4" />;
     }
   };
 
@@ -34,14 +30,10 @@ export function Timeline({ data, onTimeClick }: TimelineProps) {
     switch (type) {
       case 'start':
         return 'bg-blue-100 text-blue-700 border-blue-300';
-      case 'excellent':
-        return 'bg-yellow-100 text-yellow-700 border-yellow-300';
-      case 'good':
-        return 'bg-green-100 text-green-700 border-green-300';
-      case 'warning':
-        return 'bg-orange-100 text-orange-700 border-orange-300';
       case 'end':
         return 'bg-purple-100 text-purple-700 border-purple-300';
+      case 'content':
+        return 'bg-slate-100 text-slate-700 border-slate-300';
       default:
         return 'bg-slate-100 text-slate-700 border-slate-300';
     }
@@ -51,16 +43,29 @@ export function Timeline({ data, onTimeClick }: TimelineProps) {
     switch (type) {
       case 'start':
         return 'bg-blue-300';
-      case 'excellent':
-        return 'bg-yellow-300';
-      case 'good':
-        return 'bg-green-300';
-      case 'warning':
-        return 'bg-orange-300';
       case 'end':
         return 'bg-purple-300';
+      case 'content':
+        return 'bg-slate-300';
       default:
         return 'bg-slate-300';
+    }
+  };
+
+  const getRatingColor = (rating?: string) => {
+    switch (rating) {
+      case '최상':
+        return 'bg-green-500 text-white';
+      case '상':
+        return 'bg-blue-500 text-white';
+      case '중':
+        return 'bg-yellow-500 text-white';
+      case '하':
+        return 'bg-orange-500 text-white';
+      case '최하':
+        return 'bg-red-500 text-white';
+      default:
+        return 'bg-slate-400 text-white';
     }
   };
 
@@ -92,28 +97,15 @@ export function Timeline({ data, onTimeClick }: TimelineProps) {
           {/* 이벤트 정보 */}
           <div className="flex-1 pt-0.5">
             <div className="bg-slate-50 rounded-lg p-3 hover:bg-blue-50 transition-colors">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1">
-                  <h4 className="text-sm font-semibold text-slate-900 mb-1.5">
-                    {item.event}
-                  </h4>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                      <div 
-                        className={`h-full rounded-full transition-all ${
-                          item.confidence >= 90 ? 'bg-green-500' :
-                          item.confidence >= 75 ? 'bg-blue-500' :
-                          item.confidence >= 60 ? 'bg-yellow-500' :
-                          'bg-orange-500'
-                        }`}
-                        style={{ width: `${item.confidence}%` }}
-                      />
-                    </div>
-                    <span className="text-xs font-medium text-slate-600 min-w-[40px]">
-                      {item.confidence}%
-                    </span>
-                  </div>
-                </div>
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="text-sm font-semibold text-slate-900">
+                  {item.event}
+                </h4>
+                {item.rating && (
+                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getRatingColor(item.rating)}`}>
+                    {item.rating}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -125,19 +117,23 @@ export function Timeline({ data, onTimeClick }: TimelineProps) {
         <div className="flex flex-wrap gap-3 text-xs">
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full bg-green-500"></div>
-            <span className="text-slate-600">잘함 (90%+)</span>
+            <span className="text-slate-600">최상</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
-            <span className="text-slate-600">양호 (75-89%)</span>
+            <span className="text-slate-600">상</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full bg-yellow-500"></div>
-            <span className="text-slate-600">보통 (60-74%)</span>
+            <span className="text-slate-600">중</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full bg-orange-500"></div>
-            <span className="text-slate-600">주의 (~59%)</span>
+            <span className="text-slate-600">하</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+            <span className="text-slate-600">최하</span>
           </div>
         </div>
       </div>
