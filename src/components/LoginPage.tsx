@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Presentation, Mail, Lock, ArrowLeft, Eye, EyeOff, User } from 'lucide-react';
+import { Presentation, Mail, Lock, ArrowLeft, Eye, EyeOff, User, Check, X } from 'lucide-react';
 
 interface LoginPageProps {
   onLogin: (email: string, password: string, rememberMe: boolean) => void;
-  onSignUp?: (email: string, password: string, nickname: string) => void;
+  onSignUp?: (email: string, password: string, nickname: string) => Promise<boolean>;
   onBack: () => void;
   initialEmail?: string;
   initialPassword?: string;
@@ -20,7 +20,29 @@ export function LoginPage({ onLogin, onSignUp, onBack, initialEmail = '', initia
   // 이전에 저장된 값이 있으면 "로그인 유지" 체크박스도 체크 상태로
   const [rememberMe, setRememberMe] = useState(!!initialEmail);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // 비밀번호 유효성 검사 함수
+  const validatePassword = (pwd: string) => {
+    const hasEnglish = /[a-zA-Z]/.test(pwd);
+    const hasNumber = /[0-9]/.test(pwd);
+    const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd);
+    const minLength = pwd.length >= 10;
+    
+    const typesCount = [hasEnglish, hasNumber, hasSpecial].filter(Boolean).length;
+    const validCombination = typesCount >= 2;
+    
+    return {
+      minLength,
+      hasEnglish,
+      hasNumber,
+      hasSpecial,
+      validCombination,
+      isValid: minLength && validCombination
+    };
+  };
+
+  const passwordValidation = validatePassword(password);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email || !password) {
@@ -34,8 +56,8 @@ export function LoginPage({ onLogin, onSignUp, onBack, initialEmail = '', initia
         alert('별명을 입력해주세요.');
         return;
       }
-      if (password.length < 6) {
-        alert('비밀번호는 최소 6자 이상이어야 합니다.');
+      if (!passwordValidation.isValid) {
+        alert('비밀번호 조건을 충족하지 않습니다.\n영문, 숫자, 특수문자 중 2종류 이상을 조합하여 최소 10자리 이상 입력해주세요.');
         return;
       }
       if (password !== passwordConfirm) {
@@ -43,7 +65,21 @@ export function LoginPage({ onLogin, onSignUp, onBack, initialEmail = '', initia
         return;
       }
       if (onSignUp) {
-        onSignUp(email, password, nickname);
+        const success = await onSignUp(email, password, nickname);
+        if (success) {
+          // 회원가입 성공 시 로그인 모드로 전환
+          // 상태 업데이트를 명확하게 순서대로 실행
+          setPassword('');
+          setPasswordConfirm('');
+          setNickname('');
+          setShowPassword(false);
+          setShowPasswordConfirm(false);
+          
+          // 마지막에 모드 전환 (화면 전환이 명확하게 보이도록)
+          setTimeout(() => {
+            setIsSignUp(false);
+          }, 100);
+        }
       }
     } else {
       // 로그인
@@ -152,6 +188,57 @@ export function LoginPage({ onLogin, onSignUp, onBack, initialEmail = '', initia
                   )}
                 </button>
               </div>
+              
+              {/* 비밀번호 조건 표시 (회원가입 시만) */}
+              {isSignUp && (
+                <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                  <p className="text-xs font-semibold text-slate-700 mb-2">비밀번호 조건</p>
+                  <div className="space-y-1">
+                    <div className={`flex items-center gap-2 text-xs ${passwordValidation.minLength ? 'text-green-600' : 'text-slate-500'}`}>
+                      {passwordValidation.minLength ? (
+                        <Check className="w-4 h-4" />
+                      ) : (
+                        <X className="w-4 h-4" />
+                      )}
+                      <span>최소 10자 이상</span>
+                    </div>
+                    <div className={`flex items-center gap-2 text-xs ${passwordValidation.hasEnglish ? 'text-green-600' : 'text-slate-500'}`}>
+                      {passwordValidation.hasEnglish ? (
+                        <Check className="w-4 h-4" />
+                      ) : (
+                        <X className="w-4 h-4" />
+                      )}
+                      <span>영문 포함</span>
+                    </div>
+                    <div className={`flex items-center gap-2 text-xs ${passwordValidation.hasNumber ? 'text-green-600' : 'text-slate-500'}`}>
+                      {passwordValidation.hasNumber ? (
+                        <Check className="w-4 h-4" />
+                      ) : (
+                        <X className="w-4 h-4" />
+                      )}
+                      <span>숫자 포함</span>
+                    </div>
+                    <div className={`flex items-center gap-2 text-xs ${passwordValidation.hasSpecial ? 'text-green-600' : 'text-slate-500'}`}>
+                      {passwordValidation.hasSpecial ? (
+                        <Check className="w-4 h-4" />
+                      ) : (
+                        <X className="w-4 h-4" />
+                      )}
+                      <span>특수문자 포함</span>
+                    </div>
+                    <div className="border-t border-slate-300 mt-2 pt-2">
+                      <div className={`flex items-center gap-2 text-xs font-semibold ${passwordValidation.validCombination ? 'text-green-600' : 'text-slate-500'}`}>
+                        {passwordValidation.validCombination ? (
+                          <Check className="w-4 h-4" />
+                        ) : (
+                          <X className="w-4 h-4" />
+                        )}
+                        <span>영문, 숫자, 특수문자 중 2종류 이상 조합</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 비밀번호 확인 (회원가입 시만 표시) */}
@@ -259,7 +346,7 @@ export function LoginPage({ onLogin, onSignUp, onBack, initialEmail = '', initia
           {/* 회원가입 / 로그인 전환 */}
           <div className="mt-6 text-center">
             <p className="text-sm text-slate-600">
-              {isSignUp ? '이미 계정이 있으신가요?' : '계정이 없으신가요?'}{' '}
+              {isSignUp ? '이미 계정이 있으신가?' : '계정이 없으신가요?'}{' '}
               <button
                 type="button"
                 onClick={handleToggleMode}

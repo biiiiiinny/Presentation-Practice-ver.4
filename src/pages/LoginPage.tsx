@@ -43,7 +43,7 @@ export default function LoginPage() {
     navigate('/dashboard', { replace: true }); // 로그인 페이지를 히스토리에서 제거
   };
 
-  const handleSignUp = async (email: string, password: string, nickname: string) => {
+  const handleSignUp = async (email: string, password: string, nickname: string): Promise<boolean> => {
     // 실제로는 백엔드 API 호출
     console.log('회원가입:', email, password, '별명:', nickname);
     
@@ -56,19 +56,23 @@ export default function LoginPage() {
     //   });
     //   
     //   if (response.ok) {
-    //     alert('회원가입이 완료되었습니다. 로그인해주세요.');
-    //     // 회원가입 후 로그인 모드로 전환하도록 LoginPageComponent에서 처리
+    //     return true; // 회원가입 성공
     //   } else {
     //     const error = await response.json();
     //     alert(error.message || '회원가입에 실패했습니다.');
+    //     return false; // 회원가입 실패
     //   }
     // } catch (error) {
     //   console.error('회원가입 오류:', error);
     //   alert('회원가입 중 오류가 발생했습니다.');
+    //   return false;
     // }
 
     // 임시 회원가입 처리
-    alert(`회원가입이 완료되었습니다!\n별명: ${nickname}\n이메일: ${email}\n로그인해주세요.`);
+    // 성공 시뮬레이션
+    await new Promise(resolve => setTimeout(resolve, 500)); // 0.5초 딜레이
+    alert(`회원가입이 완료되었습니다!\n별명: ${nickname}\n\n이제 비밀번호를 입력하여 로그인하세요.`);
+    return true; // 성공 반환
   };
 
   const handleBack = () => {
