@@ -48,6 +48,11 @@ export function DashboardLayout() {
     navigate(`/presentation/results/${id}`);
   };
 
+  const handleAttemptSelect = (sessionId: string, attemptId: string) => {
+    handleSelectSession(sessionId);
+    navigate(`/presentation/results/${sessionId}/${attemptId}`);
+  };
+
   const handleNewPresentationClick = () => {
     handleNewPresentation();
     navigate('/presentation/new');
@@ -83,6 +88,7 @@ export function DashboardLayout() {
         onNewPresentation={handleNewPresentationClick}
         onNavigateToDashboard={handleNavigateToDashboard}
         onSelectSession={handleSessionSelect}
+        onSelectAttempt={handleAttemptSelect}
         onDeleteSession={handleDeleteSession}
         onDeleteAttempt={handleDeleteAttempt}
         onToggleFavorite={handleToggleFavorite}
