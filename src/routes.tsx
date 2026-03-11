@@ -26,9 +26,9 @@ export const router = createBrowserRouter([
         children: [
           { path: '/dashboard', element: <MainPage /> },
           { path: '/presentation/new', element: <PresentationSetupPage /> },
-          { path: '/presentation/self-evaluation', element: <SelfEvaluationPage /> },
-          { path: '/presentation/results/:id', element: <ResultsPage /> },
-          { path: '/presentation/results/:id/:attemptId', element: <ResultsPage /> },
+          { path: '/presentation/:sessionId/self-evaluation', element: <SelfEvaluationPage /> },
+          { path: '/presentation/results/:sessionId', element: <ResultsPage /> },
+          { path: '/presentation/results/:sessionId/:attemptId', element: <ResultsPage /> },
           { path: '/profile', element: <MyPagePage /> },
         ],
       },

@@ -7,12 +7,12 @@ import { Mic, User, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function ResultsPage() {
   const navigate = useNavigate();
-  const { id, attemptId } = useParams<{ id: string; attemptId?: string }>();
+  const { sessionId, attemptId } = useParams<{ sessionId: string; attemptId?: string }>();
   const { sessions, selfEvaluation, setCurrentSessionId } = useApp();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [activeTab, setActiveTab] = useState<'overall' | 'voice' | 'posture'>('overall');
 
-  const currentSession = sessions.find(s => s.id === id);
+  const currentSession = sessions.find(s => s.id === sessionId);
 
   // 세션을 찾지 못하면 대시보드로 리다이렉트
   if (!currentSession) {
@@ -130,7 +130,7 @@ export default function ResultsPage() {
 
   const handleRetry = () => {
     // 현재 세션을 유지하면서 재발표
-    setCurrentSessionId(id || null);
+    setCurrentSessionId(sessionId || null);
     navigate('/presentation/new');
   };
 

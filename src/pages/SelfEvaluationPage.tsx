@@ -1,17 +1,26 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { useApp } from '../contexts/AppContext';
 import { Eye, User, Mic, FileText, Loader2 } from 'lucide-react';
 
 export default function SelfEvaluationPage() {
   const navigate = useNavigate();
+  const { sessionId } = useParams<{ sessionId: string }>();
   const {
     startAnalysis,
     completeSelfEvaluation,
     currentFormData,
     analysisCompleted,
     selfEvaluationCompleted,
+    setCurrentSessionId,
   } = useApp();
+
+  // sessionId를 currentSessionId로 설정
+  useEffect(() => {
+    if (sessionId) {
+      setCurrentSessionId(sessionId);
+    }
+  }, [sessionId, setCurrentSessionId]);
 
   const [selfEvaluation, setSelfEvaluation] = useState({
     eyeContact: 0,

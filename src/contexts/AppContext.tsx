@@ -61,6 +61,7 @@ interface AppContextType {
   handleToggleFavorite: (id: string) => void;
   handleNewPresentation: () => void;
   addOrUpdateSession: (evaluation: Record<string, number>) => string;
+  createSession: (formData: any) => string;
   // 새 분석 흐름
   startAnalysis: (topic: string) => void;
   completeSelfEvaluation: (evaluation: Record<string, number>) => void;
@@ -417,6 +418,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotifications([]);
   };
 
+  // ─── createSession: 발표 설정 완료 시 세션 먼저 생성 (자기평가 전) ─────────
+  const createSession = (formData: any): string => {
+    const newId = Date.now().toString();
+    const newSession: Session = {
+      id: newId,
+      title: formData?.topic || '새로운 발표',
+      date: new Date().toISOString(),
+      score: 0, // 아직 분석 전
+      isFavorite: false,
+      formData,
+      selfEvaluation: {},
+      attempts: [{ id: `${newId}-1`, date: new Date().toISOString(), score: 0 }]
+    };
+    setSessions(prev => [newSession, ...prev]);
+    setCurrentSessionId(newId);
+    return newId;
+  };
+
   const value: AppContextType = {
     isLoggedIn,
     setIsLoggedIn,
@@ -459,6 +478,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addNotification,
     markNotificationAsRead,
     clearAllNotifications,
+    createSession,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
