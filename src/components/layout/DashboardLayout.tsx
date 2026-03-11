@@ -16,6 +16,7 @@ export function DashboardLayout() {
     setIsLoggedIn,
     handleSelectSession,
     handleDeleteSession,
+    handleDeleteAttempt,
     handleToggleFavorite,
     handleNewPresentation,
     isAnalyzing,
@@ -83,6 +84,7 @@ export function DashboardLayout() {
         onNavigateToDashboard={handleNavigateToDashboard}
         onSelectSession={handleSessionSelect}
         onDeleteSession={handleDeleteSession}
+        onDeleteAttempt={handleDeleteAttempt}
         onToggleFavorite={handleToggleFavorite}
         onNavigateToProfile={handleNavigateToProfile}
         onNavigateToSettings={handleNavigateToSettings}

@@ -40,6 +40,8 @@ interface SidebarProps {
   notifications: Notification[];
   onNotificationClick: (notification: Notification) => void;
   onClearAllNotifications: () => void;
+  onDeleteAttempt: (sessionId: string, attemptId: string) => void;
+  onSelectAttempt?: (sessionId: string, attemptId: string) => void;
 }
 
 export function Sidebar({
@@ -64,6 +66,8 @@ export function Sidebar({
   notifications,
   onNotificationClick,
   onClearAllNotifications,
+  onDeleteAttempt,
+  onSelectAttempt,
 }: SidebarProps) {
   const sortedSessions = [...sessions].sort((a, b) => {
     if (a.isFavorite && !b.isFavorite) return -1;
@@ -137,6 +141,8 @@ export function Sidebar({
                   onSelect={() => onSelectSession(session.id)}
                   onDelete={() => onDeleteSession(session.id)}
                   onToggleFavorite={() => onToggleFavorite(session.id)}
+                  onSelectAttempt={onSelectAttempt}
+                  onDeleteAttempt={onDeleteAttempt}
                 />
               ))}
             </div>
@@ -321,6 +327,8 @@ interface SessionItemProps {
   onSelect: () => void;
   onDelete: () => void;
   onToggleFavorite: () => void;
+  onSelectAttempt?: (sessionId: string, attemptId: string) => void;
+  onDeleteAttempt: (sessionId: string, attemptId: string) => void;
 }
 
 function SessionItem({
@@ -328,7 +336,9 @@ function SessionItem({
   isActive,
   onSelect,
   onDelete,
-  onToggleFavorite
+  onToggleFavorite,
+  onSelectAttempt,
+  onDeleteAttempt,
 }: SessionItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const hasMultipleAttempts = session.attempts && session.attempts.length > 1;
@@ -369,7 +379,6 @@ function SessionItem({
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <Clock className="w-3 h-3" />
             <span>{new Date(session.date).toLocaleDateString('ko-KR')}</span>
-            <span className="ml-auto">점수: {session.score}</span>
           </div>
         </div>
 
@@ -410,22 +419,30 @@ function SessionItem({
           {session.attempts.map((attempt, index) => (
             <div
               key={attempt.id}
-              className="px-3 py-1.5 rounded text-xs hover:bg-slate-800 cursor-pointer"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelect();
-              }}
+              className="group px-3 py-1.5 rounded text-xs hover:bg-slate-800 cursor-pointer"
+              onClick={() => onSelectAttempt && onSelectAttempt(session.id, attempt.id)}
             >
               <div className="flex items-center justify-between">
-                <span className="text-slate-300">
-                  {index + 1}회차
-                </span>
-                <span className="text-slate-400">
-                  {attempt.score}점
-                </span>
-              </div>
-              <div className="text-slate-500 mt-0.5">
-                {new Date(attempt.date).toLocaleDateString('ko-KR')}
+                <div className="flex-1">
+                  <div className="text-slate-300 font-medium">
+                    {index + 1}회차
+                  </div>
+                  <div className="text-slate-500 mt-0.5">
+                    {new Date(attempt.date).toLocaleDateString('ko-KR')}
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm('이 재발표 기록을 삭제하시겠습니까?')) {
+                      onDeleteAttempt(session.id, attempt.id);
+                    }
+                  }}
+                  className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-700 rounded transition-all"
+                  title="삭제"
+                >
+                  <Trash2 className="w-3 h-3 text-slate-400 hover:text-red-400" />
+                </button>
               </div>
             </div>
           ))}

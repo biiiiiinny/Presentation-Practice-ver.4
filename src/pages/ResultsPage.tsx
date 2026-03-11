@@ -7,7 +7,7 @@ import { Mic, User, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function ResultsPage() {
   const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
+  const { id, attemptId } = useParams<{ id: string; attemptId?: string }>();
   const { sessions, selfEvaluation, setCurrentSessionId } = useApp();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [activeTab, setActiveTab] = useState<'overall' | 'voice' | 'posture'>('overall');
@@ -24,6 +24,33 @@ export default function ResultsPage() {
           </h2>
           <p className="text-slate-600 mb-4">
             요청하신 발표 세션이 존재하지 않습니다.
+          </p>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            대시보드로 돌아가기
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 현재 보여줄 attempt 찾기 (attemptId가 있으면 해당 attempt, 없으면 최신 attempt)
+  const currentAttempt = attemptId
+    ? currentSession.attempts.find(a => a.id === attemptId)
+    : currentSession.attempts[currentSession.attempts.length - 1];
+
+  // attempt를 찾지 못하면
+  if (!currentAttempt) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">
+            발표 기록을 찾을 수 없습니다
+          </h2>
+          <p className="text-slate-600 mb-4">
+            요청하신 발표 기록이 존재하지 않습니다.
           </p>
           <button
             onClick={() => navigate('/dashboard')}
@@ -76,7 +103,7 @@ export default function ResultsPage() {
   ];
 
   // 자기평가 vs AI 평가 비교 데이터
-  const evaluation = currentSession.selfEvaluation || selfEvaluation;
+  const evaluation = currentAttempt.selfEvaluation || selfEvaluation;
   const comparisonData = useMemo(() => {
     const eyeContact = evaluation?.eyeContact || 3;
     const voice = evaluation?.voice || 4;

@@ -57,6 +57,7 @@ interface AppContextType {
   setIsSidebarCollapsed: (value: boolean) => void;
   handleSelectSession: (id: string) => void;
   handleDeleteSession: (id: string) => void;
+  handleDeleteAttempt: (sessionId: string, attemptId: string) => void;
   handleToggleFavorite: (id: string) => void;
   handleNewPresentation: () => void;
   addOrUpdateSession: (evaluation: Record<string, number>) => string;
@@ -370,6 +371,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (currentSessionId === id) setCurrentSessionId(null);
   };
 
+  const handleDeleteAttempt = (sessionId: string, attemptId: string) => {
+    setSessions(prev => prev.map(s =>
+      s.id === sessionId
+        ? {
+            ...s,
+            attempts: s.attempts.filter(a => a.id !== attemptId)
+          }
+        : s
+    ));
+  };
+
   const handleToggleFavorite = (id: string) => {
     setSessions(prev => prev.map(s =>
       s.id === id ? { ...s, isFavorite: !s.isFavorite } : s
@@ -426,6 +438,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsSidebarCollapsed,
     handleSelectSession,
     handleDeleteSession,
+    handleDeleteAttempt,
     handleToggleFavorite,
     handleNewPresentation,
     addOrUpdateSession,
