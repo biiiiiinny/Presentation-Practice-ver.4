@@ -1,78 +1,62 @@
 import { useNavigate } from 'react-router';
 import { LoginPage as LoginPageComponent } from '../components/LoginPage';
 import { useApp } from '../contexts/AppContext';
+import authService from '../lib/api/authService';
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { setIsLoggedIn, savedLoginEmail, savedLoginPassword, saveLoginInfo } = useApp();
 
   const handleLogin = async (email: string, password: string, rememberMe: boolean) => {
-    // 실제로는 백엔드 API 호출
-    console.log('로그인:', email, password, '로그인 유지:', rememberMe);
-    
-    // "로그인 유지" 체크 시에만 정보 저장
-    if (rememberMe) {
-      saveLoginInfo(email, password);
-    } else {
-      saveLoginInfo('', ''); // 체크 안 하면 초기화
+    try {
+      console.log('로그인 시도:', email);
+      
+      // 백엔드 API 호출
+      const response = await authService.login({ email, password });
+      
+      if (response.success) {
+        console.log('✅ 로그인 성공:', response.user);
+        
+        // "로그인 유지" 체크 시에만 정보 저장
+        if (rememberMe) {
+          saveLoginInfo(email, password);
+        } else {
+          saveLoginInfo('', '');
+        }
+        
+        setIsLoggedIn(true);
+        navigate('/dashboard', { replace: true });
+      } else {
+        // 로그인 실패
+        alert(response.message || '로그인에 실패했습니다.');
+      }
+    } catch (error: any) {
+      console.error('❌ 로그인 오류:', error);
+      alert('로그인 중 오류가 발생했습니다.');
     }
-    
-    // TODO: 실제 API 연결 시 아래와 같이 구현
-    // try {
-    //   const response = await fetch('/api/auth/login', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ email, password })
-    //   });
-    //   
-    //   if (response.ok) {
-    //     const data = await response.json();
-    //     localStorage.setItem('token', data.token);
-    //     setIsLoggedIn(true);
-    //     navigate('/dashboard');
-    //   } else {
-    //     alert('로그인에 실패했습니다.');
-    //   }
-    // } catch (error) {
-    //   console.error('로그인 오류:', error);
-    //   alert('로그인 중 오류가 발생했습니다.');
-    // }
-
-    // 임시 로그인 처리
-    setIsLoggedIn(true);
-    navigate('/dashboard', { replace: true }); // 로그인 페이지를 히스토리에서 제거
   };
 
   const handleSignUp = async (email: string, password: string, nickname: string): Promise<boolean> => {
-    // 실제로는 백엔드 API 호출
-    console.log('회원가입:', email, password, '별명:', nickname);
-    
-    // TODO: 실제 API 연결 시 아래와 같이 구현
-    // try {
-    //   const response = await fetch('/api/auth/signup', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ email, password, nickname })
-    //   });
-    //   
-    //   if (response.ok) {
-    //     return true; // 회원가입 성공
-    //   } else {
-    //     const error = await response.json();
-    //     alert(error.message || '회원가입에 실패했습니다.');
-    //     return false; // 회원가입 실패
-    //   }
-    // } catch (error) {
-    //   console.error('회원가입 오류:', error);
-    //   alert('회원가입 중 오류가 발생했습니다.');
-    //   return false;
-    // }
-
-    // 임시 회원가입 처리
-    // 성공 시뮬레이션
-    await new Promise(resolve => setTimeout(resolve, 500)); // 0.5초 딜레이
-    alert(`회원가입이 완료되었습니다!\n별명: ${nickname}\n\n이제 비밀번호를 입력하여 로그인하세요.`);
-    return true; // 성공 반환
+    try {
+      console.log('회원가입 시도:', email, nickname);
+      
+      // 백엔드 API 호출 (Mock 모드 또는 실제 API)
+      const response = await authService.register({ email, password, nickname });
+      
+      if (response.success) {
+        console.log('✅ 회원가입 성공:', response.user);
+        alert(`회원가입이 완료되었습니다!\n별명: ${nickname}\n\n이제 비밀번호를 입력하여 로그인하세요.`);
+        return true;
+      } else {
+        // 회원가입 실패
+        alert(response.message || '회원가입에 실패했습니다.');
+        return false;
+      }
+    } catch (error: any) {
+      console.error('❌ 회원가입 오류:', error);
+      alert('회원가입 중 오류가 발생했습니다.');
+      return false;
+    }
   };
 
   const handleBack = () => {
