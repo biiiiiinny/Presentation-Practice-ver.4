@@ -111,12 +111,12 @@ export default function ResultsPage() {
     const content = evaluation?.content || 5;
     
     return [
-      { id: 'eye-contact', category: '시선', self: eyeContact, ai: 4 },
-      { id: 'voice', category: '음성', self: voice, ai: 4 },
-      { id: 'posture', category: '자세', self: posture, ai: 5 },
-      { id: 'content', category: '내용', self: content, ai: 4 }
+      { id: `eye-contact-${sessionId}`, category: '시선', self: eyeContact, ai: 4 },
+      { id: `voice-${sessionId}`, category: '음성', self: voice, ai: 4 },
+      { id: `posture-${sessionId}`, category: '자세', self: posture, ai: 5 },
+      { id: `content-${sessionId}`, category: '내용', self: content, ai: 4 }
     ];
-  }, [evaluation]);
+  }, [evaluation, sessionId]);
 
   // 타임라인 클릭 시 비디오 시간 이동
   const handleTimelineClick = (timeString: string) => {

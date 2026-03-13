@@ -6,7 +6,7 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 // 환경변수에서 설정 가져오기
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8090';
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false'; // 기본값: true (안전한 기본값)
 
 // 디버깅용 로그
