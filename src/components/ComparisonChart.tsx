@@ -55,7 +55,8 @@ export function ComparisonChart({ data }: ComparisonChartProps) {
   const chartData = useMemo(() => 
     data.map((item, index) => ({
       ...item,
-      id: item.id || `${item.category}-${index}`
+      id: item.id || `${item.category}-${index}`,
+      key: item.id || `chart-item-${index}` // 추가: recharts 내부 key 충돌 방지
     })),
     [data]
   );
