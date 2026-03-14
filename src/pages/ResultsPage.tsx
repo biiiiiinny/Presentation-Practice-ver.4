@@ -9,11 +9,37 @@ export default function ResultsPage() {
   const navigate = useNavigate();
   const { sessionId, attemptId } = useParams<{ sessionId: string; attemptId?: string }>();
   const { sessions, selfEvaluation, setCurrentSessionId } = useApp();
+  
+  // ✅ 모든 Hook을 최상단에서 호출
   const videoRef = useRef<HTMLVideoElement>(null);
   const [activeTab, setActiveTab] = useState<'overall' | 'voice' | 'posture'>('overall');
 
   const currentSession = sessions.find(s => s.id === sessionId);
 
+  // 현재 보여줄 attempt 찾기 (attemptId가 있으면 해당 attempt, 없으면 최신 attempt)
+  const currentAttempt = currentSession
+    ? (attemptId
+        ? currentSession.attempts.find(a => a.id === attemptId)
+        : currentSession.attempts[currentSession.attempts.length - 1])
+    : null;
+
+  // 자기평가 vs AI 평가 비교 데이터 (항상 호출되어야 함)
+  const evaluation = currentAttempt?.selfEvaluation || selfEvaluation;
+  const comparisonData = useMemo(() => {
+    const eyeContact = evaluation?.eyeContact || 3;
+    const voice = evaluation?.voice || 4;
+    const posture = evaluation?.posture || 4;
+    const content = evaluation?.content || 5;
+    
+    return [
+      { id: `eye-contact-${sessionId}`, category: '시선', self: eyeContact, ai: 4 },
+      { id: `voice-${sessionId}`, category: '음성', self: voice, ai: 4 },
+      { id: `posture-${sessionId}`, category: '자세', self: posture, ai: 5 },
+      { id: `content-${sessionId}`, category: '내용', self: content, ai: 4 }
+    ];
+  }, [evaluation, sessionId]);
+
+  // ✅ 모든 Hook 호출 후에 조건 체크
   // 세션을 찾지 못하면 대시보드로 리다이렉트
   if (!currentSession) {
     return (
@@ -35,11 +61,6 @@ export default function ResultsPage() {
       </div>
     );
   }
-
-  // 현재 보여줄 attempt 찾기 (attemptId가 있으면 해당 attempt, 없으면 최신 attempt)
-  const currentAttempt = attemptId
-    ? currentSession.attempts.find(a => a.id === attemptId)
-    : currentSession.attempts[currentSession.attempts.length - 1];
 
   // attempt를 찾지 못하면
   if (!currentAttempt) {
@@ -101,22 +122,6 @@ export default function ResultsPage() {
       text: '둘째, 반복 연습을 통해 자신감을 키울 수 있습니다. 이상으로 발표를 마치겠습니다. 감사합니다.'
     }
   ];
-
-  // 자기평가 vs AI 평가 비교 데이터
-  const evaluation = currentAttempt.selfEvaluation || selfEvaluation;
-  const comparisonData = useMemo(() => {
-    const eyeContact = evaluation?.eyeContact || 3;
-    const voice = evaluation?.voice || 4;
-    const posture = evaluation?.posture || 4;
-    const content = evaluation?.content || 5;
-    
-    return [
-      { id: `eye-contact-${sessionId}`, category: '시선', self: eyeContact, ai: 4 },
-      { id: `voice-${sessionId}`, category: '음성', self: voice, ai: 4 },
-      { id: `posture-${sessionId}`, category: '자세', self: posture, ai: 5 },
-      { id: `content-${sessionId}`, category: '내용', self: content, ai: 4 }
-    ];
-  }, [evaluation, sessionId]);
 
   // 타임라인 클릭 시 비디오 시간 이동
   const handleTimelineClick = (timeString: string) => {
