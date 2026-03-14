@@ -126,7 +126,7 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
         {/* 사용 방법 */}
         <div className="bg-white rounded-2xl shadow-xl p-8 sm:p-12 border border-slate-200">
           <h2 className="text-3xl font-bold text-slate-900 text-center mb-12">
-            이렇게 사용해
+            이렇게 사용해 보세요!
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="text-center">
