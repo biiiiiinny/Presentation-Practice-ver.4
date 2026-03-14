@@ -1,46 +1,20 @@
 import { useState } from 'react';
-import { Presentation, Mail, Lock, ArrowLeft, Eye, EyeOff, User, Check, X } from 'lucide-react';
+import { Presentation, Mail, Lock, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { Link } from 'react-router';
 
 interface LoginPageProps {
   onLogin: (email: string, password: string, rememberMe: boolean) => void;
-  onSignUp?: (email: string, password: string, nickname: string) => Promise<boolean>;
   onBack: () => void;
   initialEmail?: string;
   initialPassword?: string;
 }
 
-export function LoginPage({ onLogin, onSignUp, onBack, initialEmail = '', initialPassword = '' }: LoginPageProps) {
+export function LoginPage({ onLogin, onBack, initialEmail = '', initialPassword = '' }: LoginPageProps) {
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState(initialPassword);
-  const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [nickname, setNickname] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
   // 이전에 저장된 값이 있으면 "로그인 유지" 체크박스도 체크 상태로
   const [rememberMe, setRememberMe] = useState(!!initialEmail);
-
-  // 비밀번호 유효성 검사 함수
-  const validatePassword = (pwd: string) => {
-    const hasEnglish = /[a-zA-Z]/.test(pwd);
-    const hasNumber = /[0-9]/.test(pwd);
-    const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd);
-    const minLength = pwd.length >= 10;
-    
-    const typesCount = [hasEnglish, hasNumber, hasSpecial].filter(Boolean).length;
-    const validCombination = typesCount >= 2;
-    
-    return {
-      minLength,
-      hasEnglish,
-      hasNumber,
-      hasSpecial,
-      validCombination,
-      isValid: minLength && validCombination
-    };
-  };
-
-  const passwordValidation = validatePassword(password);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,49 +24,7 @@ export function LoginPage({ onLogin, onSignUp, onBack, initialEmail = '', initia
       return;
     }
 
-    if (isSignUp) {
-      // 회원가입 유효성 검사
-      if (!nickname.trim()) {
-        alert('별명을 입력해주세요.');
-        return;
-      }
-      if (!passwordValidation.isValid) {
-        alert('비밀번호 조건을 충족하지 않습니다.\n영문, 숫자, 특수문자 중 2종류 이상을 조합하여 최소 10자리 이상 입력해주세요.');
-        return;
-      }
-      if (password !== passwordConfirm) {
-        alert('비밀번호가 일치하지 않습니다.');
-        return;
-      }
-      if (onSignUp) {
-        const success = await onSignUp(email, password, nickname);
-        if (success) {
-          // 회원가입 성공 시 로그인 모드로 전환
-          // 상태 업데이트를 명확하게 순서대로 실행
-          setPassword('');
-          setPasswordConfirm('');
-          setNickname('');
-          setShowPassword(false);
-          setShowPasswordConfirm(false);
-          
-          // 마지막에 모드 전환 (화면 전환이 명확하게 보이도록)
-          setTimeout(() => {
-            setIsSignUp(false);
-          }, 100);
-        }
-      }
-    } else {
-      // 로그인
-      onLogin(email, password, rememberMe);
-    }
-  };
-
-  const handleToggleMode = () => {
-    setIsSignUp(!isSignUp);
-    // 모드 전환 시 입력 필드 초기화
-    setPassword('');
-    setPasswordConfirm('');
-    setNickname('');
+    onLogin(email, password, rememberMe);
   };
 
   return (
@@ -117,10 +49,10 @@ export function LoginPage({ onLogin, onSignUp, onBack, initialEmail = '', initia
               </div>
             </div>
             <h1 className="text-2xl font-bold text-slate-900 mb-2">
-              {isSignUp ? '회원가입' : '로그인'}
+              로그인
             </h1>
             <p className="text-slate-600">
-              {isSignUp ? '새로운 계정을 만들어보세요' : '발표 연습을 시작하세요'}
+              발표 연습을 시작하세요
             </p>
           </div>
 
@@ -142,25 +74,6 @@ export function LoginPage({ onLogin, onSignUp, onBack, initialEmail = '', initia
                 />
               </div>
             </div>
-
-            {/* 별명 (회원가입 시만 표시) */}
-            {isSignUp && (
-              <div>
-                <label className="block text-sm font-semibold text-slate-900 mb-2">
-                  별명
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input
-                    type="text"
-                    value={nickname}
-                    onChange={(e) => setNickname(e.target.value)}
-                    placeholder="사용할 별명을 입력하세요"
-                    className="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                  />
-                </div>
-              </div>
-            )}
 
             {/* 비밀번호 */}
             <div>
@@ -188,122 +101,33 @@ export function LoginPage({ onLogin, onSignUp, onBack, initialEmail = '', initia
                   )}
                 </button>
               </div>
-              
-              {/* 비밀번호 조건 표시 (회원가입 시만) */}
-              {isSignUp && (
-                <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <p className="text-xs font-semibold text-slate-700 mb-2">비밀번호 조건</p>
-                  <div className="space-y-1">
-                    <div className={`flex items-center gap-2 text-xs ${passwordValidation.minLength ? 'text-green-600' : 'text-slate-500'}`}>
-                      {passwordValidation.minLength ? (
-                        <Check className="w-4 h-4" />
-                      ) : (
-                        <X className="w-4 h-4" />
-                      )}
-                      <span>최소 10자 이상</span>
-                    </div>
-                    <div className={`flex items-center gap-2 text-xs ${passwordValidation.hasEnglish ? 'text-green-600' : 'text-slate-500'}`}>
-                      {passwordValidation.hasEnglish ? (
-                        <Check className="w-4 h-4" />
-                      ) : (
-                        <X className="w-4 h-4" />
-                      )}
-                      <span>영문 포함</span>
-                    </div>
-                    <div className={`flex items-center gap-2 text-xs ${passwordValidation.hasNumber ? 'text-green-600' : 'text-slate-500'}`}>
-                      {passwordValidation.hasNumber ? (
-                        <Check className="w-4 h-4" />
-                      ) : (
-                        <X className="w-4 h-4" />
-                      )}
-                      <span>숫자 포함</span>
-                    </div>
-                    <div className={`flex items-center gap-2 text-xs ${passwordValidation.hasSpecial ? 'text-green-600' : 'text-slate-500'}`}>
-                      {passwordValidation.hasSpecial ? (
-                        <Check className="w-4 h-4" />
-                      ) : (
-                        <X className="w-4 h-4" />
-                      )}
-                      <span>특수문자 포함</span>
-                    </div>
-                    <div className="border-t border-slate-300 mt-2 pt-2">
-                      <div className={`flex items-center gap-2 text-xs font-semibold ${passwordValidation.validCombination ? 'text-green-600' : 'text-slate-500'}`}>
-                        {passwordValidation.validCombination ? (
-                          <Check className="w-4 h-4" />
-                        ) : (
-                          <X className="w-4 h-4" />
-                        )}
-                        <span>영문, 숫자, 특수문자 중 2종류 이상 조합</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* 비밀번호 확인 (회원가입 시만 표시) */}
-            {isSignUp && (
-              <div>
-                <label className="block text-sm font-semibold text-slate-900 mb-2">
-                  비밀번호 확인
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input
-                    type={showPasswordConfirm ? 'text' : 'password'}
-                    value={passwordConfirm}
-                    onChange={(e) => setPasswordConfirm(e.target.value)}
-                    placeholder="비밀번호를 다시 입력하세요"
-                    className="w-full pl-11 pr-11 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                  >
-                    {showPasswordConfirm ? (
-                      <EyeOff className="w-5 h-5" />
-                    ) : (
-                      <Eye className="w-5 h-5" />
-                    )}
-                  </button>
-                </div>
-                {/* 비밀번호 일치 여부 표시 */}
-                {passwordConfirm && (
-                  <p className={`text-sm mt-1 ${password === passwordConfirm ? 'text-green-600' : 'text-red-600'}`}>
-                    {password === passwordConfirm ? '✓ 비밀번호가 일치합니다' : '✗ 비밀번호가 일치하지 않습니다'}
-                  </p>
-                )}
-              </div>
-            )}
-
             {/* 비밀번호 찾기 / 기억하기 */}
-            {!isSignUp && (
-              <div className="flex items-center justify-between text-sm">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-slate-600">로그인 유지</span>
-                </label>
-                <button
-                  type="button"
-                  className="text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  비밀번호 찾기
-                </button>
-              </div>
-            )}
+            <div className="flex items-center justify-between text-sm">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-slate-600">로그인 유지</span>
+              </label>
+              <button
+                type="button"
+                className="text-blue-600 hover:text-blue-700 font-medium"
+              >
+                비밀번호 찾기
+              </button>
+            </div>
 
             {/* 제출 버튼 */}
             <button
               type="submit"
               className="w-full py-3 bg-blue-900 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl hover:bg-blue-800 transition-all duration-300"
             >
-              {isSignUp ? '회원가입' : '로그인'}
+              로그인
             </button>
           </form>
 
@@ -343,22 +167,21 @@ export function LoginPage({ onLogin, onSignUp, onBack, initialEmail = '', initia
             </div>
           </div>
 
-          {/* 회원가입 / 로그인 전환 */}
+          {/* 회원가입 링크 */}
           <div className="mt-6 text-center">
             <p className="text-sm text-slate-600">
-              {isSignUp ? '이미 계정이 있으신가?' : '계정이 없으신가요?'}{' '}
-              <button
-                type="button"
-                onClick={handleToggleMode}
+              계정이 없으신가요?{' '}
+              <Link
+                to="/signup"
                 className="text-blue-600 hover:text-blue-700 font-semibold"
               >
-                {isSignUp ? '로그인' : '회원가입'}
-              </button>
+                회원가입
+              </Link>
             </p>
           </div>
         </div>
 
-        {/* 모 안내 */}
+        {/* 데모 안내 */}
         <div className="mt-6 text-center">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <p className="text-sm text-blue-800">

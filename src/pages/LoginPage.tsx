@@ -11,7 +11,7 @@ export default function LoginPage() {
     try {
       console.log('로그인 시도:', email);
       
-      // 백엔드 API 호출
+      // 백엔드 API 호출 (Mock 모드 또는 실제 API)
       const response = await authService.login({ email, password });
       
       if (response.success) {
@@ -36,36 +36,12 @@ export default function LoginPage() {
     }
   };
 
-  const handleSignUp = async (email: string, password: string, nickname: string): Promise<boolean> => {
-    try {
-      console.log('회원가입 시도:', email, nickname);
-      
-      // 백엔드 API 호출 (Mock 모드 또는 실제 API)
-      const response = await authService.register({ email, password, nickname });
-      
-      if (response.success) {
-        console.log('✅ 회원가입 성공:', response.user);
-        alert(`회원가입이 완료되었습니다!\n별명: ${nickname}\n\n이제 비밀번호를 입력하여 로그인하세요.`);
-        return true;
-      } else {
-        // 회원가입 실패
-        alert(response.message || '회원가입에 실패했습니다.');
-        return false;
-      }
-    } catch (error: any) {
-      console.error('❌ 회원가입 오류:', error);
-      alert('회원가입 중 오류가 발생했습니다.');
-      return false;
-    }
-  };
-
   const handleBack = () => {
     navigate('/');
   };
 
   return <LoginPageComponent 
     onLogin={handleLogin}
-    onSignUp={handleSignUp}
     onBack={handleBack}
     initialEmail={savedLoginEmail}
     initialPassword={savedLoginPassword}

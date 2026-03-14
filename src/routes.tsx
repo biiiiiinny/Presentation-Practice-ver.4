@@ -3,6 +3,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
+import SignupPage from './pages/SignupPage';
 import MainPage from './pages/MainPage';
 import PresentationSetupPage from './pages/PresentationSetupPage';
 import SelfEvaluationPage from './pages/SelfEvaluationPage';
@@ -17,6 +18,10 @@ export const router = createBrowserRouter([
   {
     path: '/login',
     element: <LoginPage />,
+  },
+  {
+    path: '/signup',
+    element: <SignupPage />,
   },
   {
     element: <ProtectedRoute />,
