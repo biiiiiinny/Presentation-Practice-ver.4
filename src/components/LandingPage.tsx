@@ -7,28 +7,22 @@ interface LandingPageProps {
 export function LandingPage({ onGetStarted }: LandingPageProps) {
   const features = [
     {
-      icon: Eye,
-      title: '시선 처리 분석',
-      description: 'AI가 청중과의 아이컨택을 분석하고 개선점을 제안합니다',
-      color: 'bg-blue-900'
-    },
-    {
       icon: Mic,
       title: '음성 분석',
       description: '말하는 속도, 발음, 잉여표현 등을 체크하여 피드백합니다',
-      color: 'bg-blue-800'
+      color: 'bg-blue-900'
     },
     {
       icon: User,
       title: '자세 분석',
       description: '발표 자세와 손동작의 자연스러움을 평가합니다',
-      color: 'bg-blue-700'
+      color: 'bg-blue-800'
     },
     {
       icon: TrendingUp,
       title: '종합 분석',
       description: '시간대별 분석과 자기평가 비교로 객관적인 인사이트 제공',
-      color: 'bg-indigo-900'
+      color: 'bg-blue-700'
     }
   ];
 
@@ -81,7 +75,7 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
                 <div className="text-sm text-slate-600">분석 기술</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-slate-900 mb-1">4가지</div>
+                <div className="text-3xl font-bold text-slate-900 mb-1">3가지</div>
                 <div className="text-sm text-slate-600">평가 항목</div>
               </div>
               <div className="text-center">
@@ -104,7 +98,7 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
           {features.map((feature, index) => (
             <div
               key={index}
@@ -126,7 +120,7 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
         {/* 사용 방법 */}
         <div className="bg-white rounded-2xl shadow-xl p-8 sm:p-12 border border-slate-200">
           <h2 className="text-3xl font-bold text-slate-900 text-center mb-12">
-            이렇게 사용해 보세요!
+            이렇게 사용해 보세요
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="text-center">
