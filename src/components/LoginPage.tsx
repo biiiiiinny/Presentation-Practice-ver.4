@@ -27,6 +27,12 @@ export function LoginPage({ onLogin, onBack, initialEmail = '', initialPassword 
     onLogin(email, password, rememberMe);
   };
 
+  // 데모 계정 자동 입력
+  const handleDemoLogin = () => {
+    setEmail('demo@example.com');
+    setPassword('demo1234');
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
       <div className="max-w-md w-full">
@@ -184,9 +190,16 @@ export function LoginPage({ onLogin, onBack, initialEmail = '', initialPassword 
         {/* 데모 안내 */}
         <div className="mt-6 text-center">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-blue-800">
+            <p className="text-sm text-blue-800 mb-3">
               <span className="font-semibold">데모 계정:</span> demo@example.com / demo1234
             </p>
+            <button
+              type="button"
+              onClick={handleDemoLogin}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg"
+            >
+              데모 계정으로 로그인
+            </button>
           </div>
         </div>
       </div>

@@ -14,6 +14,13 @@ const MOCK_TOKEN = 'mock_jwt_token_12345';
 const getInitialMockUsers = (): User[] => [
   {
     id: 1,
+    email: 'demo@example.com',
+    nickname: '데모 사용자',
+    createdAt: '2024-01-01T00:00:00',
+    updatedAt: '2024-01-01T00:00:00',
+  },
+  {
+    id: 2,
     email: 'test@example.com',
     nickname: '테스터',
     createdAt: '2024-01-01T00:00:00',
@@ -27,7 +34,21 @@ export const mockUserDB = {
   // 모든 사용자 조회
   getAll: (): User[] => {
     const users = localStorage.getItem(MOCK_USERS_KEY);
-    return users ? JSON.parse(users) : getInitialMockUsers();
+    if (!users) {
+      // 초기 사용자가 없으면 초기화
+      const initialUsers = getInitialMockUsers();
+      localStorage.setItem(MOCK_USERS_KEY, JSON.stringify(initialUsers));
+      
+      // 초기 비밀번호도 설정
+      const initialPasswords = {
+        'demo@example.com': 'demo1234',
+        'test@example.com': 'test1234',
+      };
+      localStorage.setItem('mockPasswords', JSON.stringify(initialPasswords));
+      
+      return initialUsers;
+    }
+    return JSON.parse(users);
   },
 
   // 이메일로 사용자 찾기
