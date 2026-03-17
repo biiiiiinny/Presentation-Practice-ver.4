@@ -1,13 +1,13 @@
 import { useNavigate, useParams } from 'react-router';
 import { useApp } from '../contexts/AppContext';
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { Timeline } from '../components/Timeline';
 import { ComparisonChart } from '../components/ComparisonChart';
 import { Mic, User, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function ResultsPage() {
   const navigate = useNavigate();
-  const { sessionId, attemptId } = useParams<{ sessionId: string; attemptId?: string }>();
+  const { sessionId, attemptNumber } = useParams<{ sessionId: string; attemptNumber?: string }>();
   const { sessions, selfEvaluation, setCurrentSessionId } = useApp();
   
   // ✅ 모든 Hook을 최상단에서 호출
@@ -16,12 +16,24 @@ export default function ResultsPage() {
 
   const currentSession = sessions.find(s => s.id === sessionId);
 
-  // 현재 보여줄 attempt 찾기 (attemptId가 있으면 해당 attempt, 없으면 최신 attempt)
-  const currentAttempt = currentSession
-    ? (attemptId
-        ? currentSession.attempts.find(a => a.id === attemptId)
+  // 현재 보여줄 attempt 찾기
+  const currentAttempt = currentSession && currentSession.attempts.length > 0
+    ? (attemptNumber
+        // attemptNumber가 있으면 해당 회차 찾기 (예: "2" → 인덱스 1)
+        ? currentSession.attempts[parseInt(attemptNumber) - 1]
+        // attemptNumber가 없으면 최신 attempt
         : currentSession.attempts[currentSession.attempts.length - 1])
     : null;
+
+  // 🔍 디버깅
+  console.log('🔍 ResultsPage Debug:', {
+    sessionId,
+    attemptNumber,
+    currentSession,
+    attemptsCount: currentSession?.attempts.length,
+    currentAttempt,
+    allAttempts: currentSession?.attempts
+  });
 
   // 자기평가 vs AI 평가 비교 데이터 (항상 호출되어야 함)
   const evaluation = currentAttempt?.selfEvaluation || selfEvaluation;
@@ -39,49 +51,30 @@ export default function ResultsPage() {
     ];
   }, [evaluation, sessionId]);
 
-  // ✅ 모든 Hook 호출 후에 조건 체크
   // 세션을 찾지 못하면 대시보드로 리다이렉트
+  useEffect(() => {
+    if (!currentSession) {
+      navigate('/dashboard');
+    }
+  }, [currentSession, navigate]);
+
+  // 세션은 있지만 attempt가 없으면 자기평가 페이지로 리다이렉트
+  useEffect(() => {
+    if (currentSession && currentSession.attempts.length === 0) {
+      // 자기평가가 완료되지 않았으므로 자기평가 페이지로 이동
+      navigate(`/presentation/${sessionId}/self-evaluation`);
+    }
+  }, [currentSession, sessionId, navigate]);
+
+  // 모든 Hook 호출 후에 조건 체크
+  // 세션을 찾지 못하면
   if (!currentSession) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">
-            세션을 찾을 수 없습니다
-          </h2>
-          <p className="text-slate-600 mb-4">
-            요청하신 발표 세션이 존재하지 않습니다.
-          </p>
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            대시보드로 돌아가기
-          </button>
-        </div>
-      </div>
-    );
+    return null; // useEffect에서 리다이렉트 처리
   }
 
-  // attempt를 찾지 못하면
+  // attempt를 찾지 못하면 (자기평가 미완료)
   if (!currentAttempt) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">
-            발표 기록을 찾을 수 없습니다
-          </h2>
-          <p className="text-slate-600 mb-4">
-            요청하신 발표 기록이 존재하지 않습니다.
-          </p>
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            대시보드로 돌아가기
-          </button>
-        </div>
-      </div>
-    );
+    return null; // useEffect에서 리다이렉트 처리
   }
 
   // 타임라인 데이터 - 스크립트 기반 발표 내용 구조만
@@ -379,14 +372,14 @@ export default function ResultsPage() {
 
           {/* 왼쪽 상단: 영상 플레이어 */}
           <div className="bg-black rounded-xl shadow-lg overflow-hidden flex items-center justify-center" style={{ flex: '0 0 52%' }}>
-            {currentSession.videoUrl ? (
+            {currentAttempt.videoUrl ? (
               <video
                 ref={videoRef}
                 controls
                 className="w-full h-full object-contain"
-                src={currentSession.videoUrl}
+                src={currentAttempt.videoUrl}
               >
-                <source src={currentSession.videoUrl} type="video/mp4" />
+                <source src={currentAttempt.videoUrl} type="video/mp4" />
                 브라우저가 비디오를 지원하지 않습니다.
               </video>
             ) : (

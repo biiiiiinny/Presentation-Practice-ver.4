@@ -6,6 +6,7 @@ export interface Attempt {
   score: number;
   selfEvaluation?: Record<string, number>;
   videoFile?: File | null;
+  videoUrl?: string;
 }
 
 export interface Session {
@@ -118,7 +119,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         timeLimit: '10',
         feedbackTone: 'default'
       },
-      attempts: [{ id: '1-1', date: '2024-01-28', score: 86, selfEvaluation: { accuracy: 20, logic: 30, creativity: 40, cooperation: 10 } }]
+      attempts: [
+        { 
+          id: '1-1', 
+          date: '2024-01-28', 
+          score: 86, 
+          selfEvaluation: { eyeContact: 4, voice: 4, posture: 5, content: 4 }
+        }
+      ]
     },
     {
       id: '2',
@@ -134,7 +142,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         timeLimit: '15',
         feedbackTone: 'kind'
       },
-      attempts: [{ id: '2-1', date: '2024-01-27', score: 82, selfEvaluation: { accuracy: 25, logic: 35, creativity: 30, delivery: 10 } }]
+      attempts: [
+        { 
+          id: '2-1', 
+          date: '2024-01-27', 
+          score: 82, 
+          selfEvaluation: { eyeContact: 3, voice: 4, posture: 4, content: 5 }
+        },
+        { 
+          id: '2-2', 
+          date: '2024-01-28', 
+          score: 88, 
+          selfEvaluation: { eyeContact: 4, voice: 5, posture: 4, content: 5 }
+        }
+      ]
     },
     {
       id: '3',
@@ -150,7 +171,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         timeLimit: '12',
         feedbackTone: 'honest'
       },
-      attempts: [{ id: '3-1', date: '2024-01-25', score: 88, selfEvaluation: { accuracy: 30, logic: 40, creativity: 20, structure: 10 } }]
+      attempts: [
+        { 
+          id: '3-1', 
+          date: '2024-01-25', 
+          score: 88, 
+          selfEvaluation: { eyeContact: 5, voice: 4, posture: 5, content: 4 }
+        }
+      ]
     },
     {
       id: '4',
@@ -166,60 +194,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
         timeLimit: '8',
         feedbackTone: 'default'
       },
-      attempts: [{ id: '4-1', date: '2024-01-20', score: 79, selfEvaluation: { accuracy: 15, logic: 25, creativity: 40, delivery: 20 } }]
+      attempts: [
+        { 
+          id: '4-1', 
+          date: '2024-01-20', 
+          score: 79, 
+          selfEvaluation: { eyeContact: 3, voice: 3, posture: 4, content: 4 }
+        }
+      ]
     }
   ]);
 
   // ─── 세션 생성 (ref 기반으로 최신 formData / sessionId 사용) ─────────────
-  const createSessionFromRefs = (evaluation: Record<string, number>) => {
+  const createSessionFromRefs = (evaluation: Record<string, number>): number => {
     const formData = currentFormDataRef.current;
     const sessionId = currentSessionIdRef.current;
     const videoUrl = formData?.videoFile
       ? URL.createObjectURL(formData.videoFile)
       : undefined;
 
+    let attemptNumber = 1;
+
     if (sessionId) {
-      setSessions(prev => prev.map(s =>
-        s.id === sessionId
-          ? {
-              ...s,
-              date: new Date().toISOString(),
-              score: 86,
-              selfEvaluation: evaluation,
-              videoUrl: videoUrl || s.videoUrl,
-              attempts: [
-                ...s.attempts,
-                {
-                  id: `${sessionId}-${s.attempts.length + 1}`,
-                  date: new Date().toISOString(),
-                  score: 86,
-                  selfEvaluation: evaluation
-                }
-              ]
-            }
-          : s
-      ));
-      // 재발표 알림 생성
+      // 기존 세션에 attempt 추가 (첫 발표 또는 재발표)
+      setSessions(prev => prev.map(s => {
+        if (s.id === sessionId) {
+          attemptNumber = s.attempts.length + 1;
+          return {
+            ...s,
+            date: new Date().toISOString(),
+            score: 86,
+            selfEvaluation: evaluation,
+            // Session의 videoUrl은 가장 최근 영상으로 업데이트 (하위 호환)
+            videoUrl: videoUrl || s.videoUrl,
+            attempts: [
+              ...s.attempts,
+              {
+                id: `${sessionId}-${attemptNumber}`,
+                date: new Date().toISOString(),
+                score: 86,
+                selfEvaluation: evaluation,
+                // 각 attempt마다 videoUrl 저장
+                videoUrl: videoUrl
+              }
+            ]
+          };
+        }
+        return s;
+      }));
+      // 알림 생성
       addNotification(sessionId, formData?.topic || '발표');
-    } else {
-      const newId = Date.now().toString();
-      const newSession: Session = {
-        id: newId,
-        title: formData?.topic || '새로운 발표',
-        date: new Date().toISOString(),
-        score: 86,
-        isFavorite: false,
-        formData,
-        selfEvaluation: evaluation,
-        videoUrl,
-        attempts: [{ id: `${newId}-1`, date: new Date().toISOString(), score: 86, selfEvaluation: evaluation }]
-      };
-      setSessions(prev => [newSession, ...prev]);
-      setCurrentSessionId(newId);
-      // 새 발표 알림 생성
-      addNotification(newId, formData?.topic || '새로운 발표');
     }
     setSelfEvaluation(evaluation);
+    return attemptNumber;
   };
 
   // ─── 분석 완료 후 상태 정리 (2초 뒤 progressbar 숨김) ─────────────────────
@@ -323,7 +350,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   id: `${currentSessionId}-${s.attempts.length + 1}`,
                   date: new Date().toISOString(),
                   score: 86,
-                  selfEvaluation: evaluation
+                  selfEvaluation: evaluation,
+                  videoUrl: videoUrl
                 }
               ]
             }
@@ -346,7 +374,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             id: `${newSessionId}-1`,
             date: new Date().toISOString(),
             score: 86,
-            selfEvaluation: evaluation
+            selfEvaluation: evaluation,
+            videoUrl: videoUrl
           }
         ]
       };
@@ -420,6 +449,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ─── createSession: 발표 설정 완료 시 세션 먼저 생성 (자기평가 전) ─────────
   const createSession = (formData: any): string => {
+    // ✅ 재발표인 경우: 기존 세션 ID 유지, formData만 업데이트
+    if (currentSessionId) {
+      setSessions(prev => prev.map(s =>
+        s.id === currentSessionId
+          ? { ...s, formData }
+          : s
+      ));
+      return currentSessionId;
+    }
+    
+    // ✅ 새 발표인 경우: 새 세션 생성
     const newId = Date.now().toString();
     const newSession: Session = {
       id: newId,
@@ -429,7 +469,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       isFavorite: false,
       formData,
       selfEvaluation: {},
-      attempts: [{ id: `${newId}-1`, date: new Date().toISOString(), score: 0 }]
+      attempts: [] // ✅ 빈 배열로 시작! 분석 완료 시 첫 attempt 추가됨
     };
     setSessions(prev => [newSession, ...prev]);
     setCurrentSessionId(newId);

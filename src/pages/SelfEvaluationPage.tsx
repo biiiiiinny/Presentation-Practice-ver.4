@@ -13,6 +13,7 @@ export default function SelfEvaluationPage() {
     analysisCompleted,
     selfEvaluationCompleted,
     setCurrentSessionId,
+    sessions,
   } = useApp();
 
   // sessionId를 currentSessionId로 설정
@@ -53,8 +54,25 @@ export default function SelfEvaluationPage() {
     // 자기평가 결과를 AppContext에 저장
     // AppContext가 분석 상태에 따라 즉시 세션 생성 or 대기 처리
     completeSelfEvaluation(selfEvaluation);
-    // 분석 완료 여부와 무관하게 대시보드로 즉시 이동
-    navigate('/dashboard');
+    
+    // ✅ 분석 완료를 감지해서 결과 페이지로 이동
+    // 최대 3초 대기 후 결과 페이지로 이동
+    const checkInterval = setInterval(() => {
+      const session = sessions.find(s => s.id === sessionId);
+      if (session && session.attempts.length > 0) {
+        clearInterval(checkInterval);
+        const attemptNumber = session.attempts.length;
+        navigate(`/presentation/results/${sessionId}/${attemptNumber}`);
+      }
+    }, 100);
+    
+    // 3초 후에도 안 되면 강제 이동 (타임아웃)
+    setTimeout(() => {
+      clearInterval(checkInterval);
+      const session = sessions.find(s => s.id === sessionId);
+      const attemptNumber = session?.attempts.length || 1;
+      navigate(`/presentation/results/${sessionId}/${attemptNumber}`);
+    }, 3000);
   };
 
   const categories = [
