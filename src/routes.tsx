@@ -8,7 +8,7 @@ import MainPage from './pages/MainPage';
 import PresentationSetupPage from './pages/PresentationSetupPage';
 import SelfEvaluationPage from './pages/SelfEvaluationPage';
 import ResultsPage from './pages/ResultsPage';
-import MyPagePage from './pages/MyPagePage';
+import MyPage from './pages/MyPage';
 
 export const router = createBrowserRouter([
   {
@@ -32,9 +32,8 @@ export const router = createBrowserRouter([
           { path: '/dashboard', element: <MainPage /> },
           { path: '/presentation/new', element: <PresentationSetupPage /> },
           { path: '/presentation/:sessionId/self-evaluation', element: <SelfEvaluationPage /> },
-          { path: '/presentation/results/:sessionId', element: <ResultsPage /> },
-          { path: '/presentation/results/:sessionId/:attemptId', element: <ResultsPage /> },
-          { path: '/profile', element: <MyPagePage /> },
+          { path: '/presentation/results/:sessionId/:attemptNumber', element: <ResultsPage /> },
+          { path: '/profile', element: <MyPage /> },
         ],
       },
     ],
