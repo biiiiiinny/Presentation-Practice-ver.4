@@ -369,12 +369,6 @@ function SessionItem({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <p className="text-sm font-medium truncate">{session.title}</p>
-            {hasMultipleAttempts && (
-              <span className="flex items-center gap-1 text-xs text-blue-400 bg-blue-900/30 px-1.5 py-0.5 rounded flex-shrink-0">
-                <RotateCcw className="w-3 h-3" />
-                {session.attempts.length}
-              </span>
-            )}
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <Clock className="w-3 h-3" />

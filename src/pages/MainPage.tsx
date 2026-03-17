@@ -115,7 +115,10 @@ export default function MainPage() {
                 <Card 
                   key={session.id}
                   className="hover:shadow-lg transition-shadow cursor-pointer"
-                  onClick={() => navigate(`/presentation/results/${session.id}`)}
+                  onClick={() => {
+                    const attemptNumber = session.attempts.length || 1;
+                    navigate(`/presentation/results/${session.id}/${attemptNumber}`);
+                  }}
                 >
                   <CardHeader>
                     <div className="flex items-start justify-between">

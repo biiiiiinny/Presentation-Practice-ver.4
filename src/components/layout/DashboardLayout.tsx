@@ -45,12 +45,17 @@ export function DashboardLayout() {
 
   const handleSessionSelect = (id: string) => {
     handleSelectSession(id);
-    navigate(`/presentation/results/${id}`);
+    // ✅ 최신 attempt로 이동
+    const session = sessions.find(s => s.id === id);
+    const attemptNumber = session?.attempts.length || 1;
+    navigate(`/presentation/results/${id}/${attemptNumber}`);
   };
 
   const handleAttemptSelect = (sessionId: string, attemptId: string) => {
     handleSelectSession(sessionId);
-    navigate(`/presentation/results/${sessionId}/${attemptId}`);
+    // attemptId에서 숫자만 추출 (예: "sessionId-2" → "2")
+    const attemptNumber = attemptId.split('-').pop();
+    navigate(`/presentation/results/${sessionId}/${attemptNumber}`);
   };
 
   const handleNewPresentationClick = () => {
@@ -69,7 +74,10 @@ export function DashboardLayout() {
     setShowNotifications(false);
     // 해당 세션으로 이동
     handleSelectSession(notification.sessionId);
-    navigate(`/presentation/results/${notification.sessionId}`);
+    // ✅ 최신 attempt로 이동
+    const session = sessions.find(s => s.id === notification.sessionId);
+    const attemptNumber = session?.attempts.length || 1;
+    navigate(`/presentation/results/${notification.sessionId}/${attemptNumber}`);
   };
 
   const handleClearAllNotifications = () => {
