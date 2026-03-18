@@ -43,11 +43,14 @@ export default function ResultsPage() {
     const posture = evaluation?.posture || 4;
     const content = evaluation?.content || 5;
     
+    // 고유한 키 생성 - sessionId가 없을 경우를 대비
+    const uniqueId = sessionId || 'temp';
+    
     return [
-      { id: `eye-contact-${sessionId}`, category: '시선', self: eyeContact, ai: 4 },
-      { id: `voice-${sessionId}`, category: '음성', self: voice, ai: 4 },
-      { id: `posture-${sessionId}`, category: '자세', self: posture, ai: 5 },
-      { id: `content-${sessionId}`, category: '내용', self: content, ai: 4 }
+      { id: `eye-contact-${uniqueId}`, category: '시선', self: eyeContact, ai: 4 },
+      { id: `voice-${uniqueId}`, category: '음성', self: voice, ai: 4 },
+      { id: `posture-${uniqueId}`, category: '자세', self: posture, ai: 5 },
+      { id: `content-${uniqueId}`, category: '내용', self: content, ai: 4 }
     ];
   }, [evaluation, sessionId]);
 

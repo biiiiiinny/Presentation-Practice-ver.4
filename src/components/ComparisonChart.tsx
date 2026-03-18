@@ -56,7 +56,6 @@ export function ComparisonChart({ data }: ComparisonChartProps) {
     data.map((item, index) => ({
       ...item,
       id: item.id || `${item.category}-${index}`,
-      key: item.id || `chart-item-${index}` // 추가: recharts 내부 key 충돌 방지
     })),
     [data]
   );
@@ -116,7 +115,7 @@ export function ComparisonChart({ data }: ComparisonChartProps) {
       {/* 인사이트 */}
       <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
         <p className="text-sm text-blue-900">
-          <span className="font-semibold">💡 인사이트:</span> 자기평가와 AI 평가의 차이가 큰 항목은 객관적인 시각을 기르는데 집중이 필요합니다.
+          <span className="font-semibold">인사이트:</span> 자기평가와 AI 평가의 차이가 큰 항목은 객관적인 시각을 기르는데 집중이 필요합니다.
         </p>
       </div>
     </div>
