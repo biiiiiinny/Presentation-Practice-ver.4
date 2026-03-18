@@ -2,7 +2,6 @@ import { Outlet, useNavigate } from 'react-router';
 import { Sidebar } from '../Sidebar';
 import { useApp } from '../../contexts/AppContext';
 import { Notification } from '../../contexts/AppContext';
-import { Bell } from 'lucide-react';
 import { useState } from 'react';
 
 export function DashboardLayout() {
