@@ -52,7 +52,7 @@ export const SessionService = {
     data: CreateSessionRequest
   ): Promise<CreateSessionResponse> => {
     if (isMockMode()) {
-      console.log('🔶 Mock 모드: 세션 생성', data);
+      console.log('Mock 모드: 세션 생성', data);
       
       const newSession: PresentationSession = {
         id: Date.now(),
@@ -77,7 +77,7 @@ export const SessionService = {
       };
     }
 
-    console.log('🔵 API 모드: 세션 생성', data);
+    console.log('API 모드: 세션 생성', data);
     const response = await apiClient.post<CreateSessionResponse>(
       '/api/sessions',
       data
@@ -93,7 +93,7 @@ export const SessionService = {
     size: number = 20
   ): Promise<PaginatedResponse<PresentationSession>> => {
     if (isMockMode()) {
-      console.log('🔶 Mock 모드: 세션 목록 조회');
+      console.log('Mock 모드: 세션 목록 조회');
 
       return {
         success: true,
@@ -107,7 +107,7 @@ export const SessionService = {
       };
     }
 
-    console.log('🔵 API 모드: 세션 목록 조회');
+    console.log('API 모드: 세션 목록 조회');
     const response = await apiClient.get<PaginatedResponse<PresentationSession>>(
       `/api/sessions?page=${page}&size=${size}`
     );
@@ -119,7 +119,7 @@ export const SessionService = {
    */
   getSession: async (id: number): Promise<PresentationSession> => {
     if (isMockMode()) {
-      console.log('🔶 Mock 모드: 세션 상세 조회', id);
+      console.log('Mock 모드: 세션 상세 조회', id);
 
       const session = MOCK_SESSIONS.find((s) => s.id === id);
       if (!session) {
@@ -128,7 +128,7 @@ export const SessionService = {
       return session;
     }
 
-    console.log('🔵 API 모드: 세션 상세 조회', id);
+    console.log('API 모드: 세션 상세 조회', id);
     const response = await apiClient.get<ApiResponse<PresentationSession>>(
       `/api/sessions/${id}`
     );
@@ -143,7 +143,7 @@ export const SessionService = {
     data: Partial<CreateSessionRequest>
   ): Promise<ApiResponse> => {
     if (isMockMode()) {
-      console.log('🔶 Mock 모드: 세션 수정', id, data);
+      console.log('Mock 모드: 세션 수정', id, data);
 
       const index = MOCK_SESSIONS.findIndex((s) => s.id === id);
       if (index === -1) {
@@ -163,7 +163,7 @@ export const SessionService = {
       };
     }
 
-    console.log('🔵 API 모드: 세션 수정', id, data);
+    console.log('API 모드: 세션 수정', id, data);
     const response = await apiClient.put<ApiResponse>(`/api/sessions/${id}`, data);
     return response.data;
   },
@@ -173,7 +173,7 @@ export const SessionService = {
    */
   deleteSession: async (id: number): Promise<ApiResponse> => {
     if (isMockMode()) {
-      console.log('🔶 Mock 모드: 세션 삭제', id);
+      console.log('Mock 모드: 세션 삭제', id);
 
       const index = MOCK_SESSIONS.findIndex((s) => s.id === id);
       if (index !== -1) {
@@ -186,7 +186,7 @@ export const SessionService = {
       };
     }
 
-    console.log('🔵 API 모드: 세션 삭제', id);
+    console.log('API 모드: 세션 삭제', id);
     const response = await apiClient.delete<ApiResponse>(`/api/sessions/${id}`);
     return response.data;
   },
@@ -196,7 +196,7 @@ export const SessionService = {
    */
   toggleFavorite: async (id: number): Promise<ApiResponse> => {
     if (isMockMode()) {
-      console.log('🔶 Mock 모드: 즐겨찾기 토글', id);
+      console.log('Mock 모드: 즐겨찾기 토글', id);
 
       const session = MOCK_SESSIONS.find((s) => s.id === id);
       if (session) {
@@ -209,7 +209,7 @@ export const SessionService = {
       };
     }
 
-    console.log('🔵 API 모드: 즐겨찾기 토글', id);
+    console.log('API 모드: 즐겨찾기 토글', id);
     const response = await apiClient.post<ApiResponse>(`/api/sessions/${id}/favorite`);
     return response.data;
   },

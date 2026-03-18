@@ -10,8 +10,6 @@ export default function SelfEvaluationPage() {
     startAnalysis,
     completeSelfEvaluation,
     currentFormData,
-    analysisCompleted,
-    selfEvaluationCompleted,
     setCurrentSessionId,
     sessions,
   } = useApp();
@@ -55,7 +53,7 @@ export default function SelfEvaluationPage() {
     // AppContext가 분석 상태에 따라 즉시 세션 생성 or 대기 처리
     completeSelfEvaluation(selfEvaluation);
     
-    // ✅ 분석 완료를 감지해서 결과 페이지로 이동
+    // 분석 완료를 감지해서 결과 페이지로 이동
     // 최대 3초 대기 후 결과 페이지로 이동
     const checkInterval = setInterval(() => {
       const session = sessions.find(s => s.id === sessionId);

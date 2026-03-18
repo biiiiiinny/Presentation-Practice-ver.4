@@ -13,7 +13,7 @@ export default function SignupPage() {
       const response = await authService.register({ email, password, nickname });
       
       if (response.success) {
-        console.log('✅ 회원가입 성공:', response.user);
+        console.log('회원가입 성공:', response.user);
         alert(`회원가입이 완료되었습니다!\n별명: ${nickname}\n\n로그인 페이지로 이동합니다.`);
         
         // 회원가입 성공 시 로그인 페이지로 리다이렉트
@@ -25,7 +25,7 @@ export default function SignupPage() {
         return false;
       }
     } catch (error: any) {
-      console.error('❌ 회원가입 오류:', error);
+      console.error('회원가입 오류:', error);
       alert('회원가입 중 오류가 발생했습니다.');
       return false;
     }

@@ -34,7 +34,7 @@ export const AttemptService = {
     data: CreateAttemptRequest
   ): Promise<CreateAttemptResponse> => {
     if (isMockMode()) {
-      console.log('🔶 Mock 모드: 시도 생성', data);
+      console.log('Mock 모드: 시도 생성', data);
 
       const newAttempt: Attempt = {
         id: Date.now(),
@@ -60,7 +60,7 @@ export const AttemptService = {
       };
     }
 
-    console.log('🔵 API 모드: 시도 생성 (멀티파트 업로드)');
+    console.log('API 모드: 시도 생성 (멀티파트 업로드)');
 
     // FormData로 변환 (영상 파일 포함)
     const formData = new FormData();
@@ -87,12 +87,12 @@ export const AttemptService = {
    */
   getAttemptsBySession: async (sessionId: number): Promise<Attempt[]> => {
     if (isMockMode()) {
-      console.log('🔶 Mock 모드: 시도 목록 조회', sessionId);
+      console.log('Mock 모드: 시도 목록 조회', sessionId);
 
       return MOCK_ATTEMPTS.filter((a) => a.sessionId === sessionId);
     }
 
-    console.log('🔵 API 모드: 시도 목록 조회', sessionId);
+    console.log('API 모드: 시도 목록 조회', sessionId);
     const response = await apiClient.get<ApiResponse<Attempt[]>>(
       `/api/sessions/${sessionId}/attempts`
     );
@@ -104,7 +104,7 @@ export const AttemptService = {
    */
   getAttempt: async (id: number): Promise<Attempt> => {
     if (isMockMode()) {
-      console.log('🔶 Mock 모드: 시도 상세 조회', id);
+      console.log('Mock 모드: 시도 상세 조회', id);
 
       const attempt = MOCK_ATTEMPTS.find((a) => a.id === id);
       if (!attempt) {
@@ -113,7 +113,7 @@ export const AttemptService = {
       return attempt;
     }
 
-    console.log('🔵 API 모드: 시도 상세 조회', id);
+    console.log('API 모드: 시도 상세 조회', id);
     const response = await apiClient.get<ApiResponse<Attempt>>(
       `/api/attempts/${id}`
     );
@@ -125,7 +125,7 @@ export const AttemptService = {
    */
   deleteAttempt: async (id: number): Promise<ApiResponse> => {
     if (isMockMode()) {
-      console.log('🔶 Mock 모드: 시도 삭제', id);
+      console.log('Mock 모드: 시도 삭제', id);
 
       const index = MOCK_ATTEMPTS.findIndex((a) => a.id === id);
       if (index !== -1) {
@@ -138,7 +138,7 @@ export const AttemptService = {
       };
     }
 
-    console.log('🔵 API 모드: 시도 삭제', id);
+    console.log('API 모드: 시도 삭제', id);
     const response = await apiClient.delete<ApiResponse>(`/api/attempts/${id}`);
     return response.data;
   },

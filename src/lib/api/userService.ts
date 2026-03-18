@@ -27,11 +27,11 @@ export const UserService = {
    */
   getProfile: async (): Promise<User> => {
     if (isMockMode()) {
-      console.log('🔶 Mock 모드: 프로필 조회');
+      console.log('Mock 모드: 프로필 조회');
       return MOCK_USER;
     }
 
-    console.log('🔵 API 모드: 프로필 조회');
+    console.log('API 모드: 프로필 조회');
     const response = await apiClient.get<User>('/api/user/profile');
     return response.data;
   },
@@ -43,7 +43,7 @@ export const UserService = {
     data: UpdateProfileRequest
   ): Promise<UpdateProfileResponse> => {
     if (isMockMode()) {
-      console.log('🔶 Mock 모드: 프로필 수정', data);
+      console.log('Mock 모드: 프로필 수정', data);
 
       if (data.nickname) {
         MOCK_USER.nickname = data.nickname;
@@ -57,7 +57,7 @@ export const UserService = {
       };
     }
 
-    console.log('🔵 API 모드: 프로필 수정', data);
+    console.log('API 모드: 프로필 수정', data);
     const response = await apiClient.put<UpdateProfileResponse>(
       '/api/user/profile',
       data
@@ -70,7 +70,7 @@ export const UserService = {
    */
   deleteAccount: async (password: string): Promise<{ success: boolean; message: string }> => {
     if (isMockMode()) {
-      console.log('🔶 Mock 모드: 회원 탈퇴');
+      console.log('Mock 모드: 회원 탈퇴');
 
       return {
         success: true,
@@ -78,7 +78,7 @@ export const UserService = {
       };
     }
 
-    console.log('🔵 API 모드: 회원 탈퇴');
+    console.log('API 모드: 회원 탈퇴');
     const response = await apiClient.delete<{ success: boolean; message: string }>(
       '/api/user/account',
       { data: { password } }

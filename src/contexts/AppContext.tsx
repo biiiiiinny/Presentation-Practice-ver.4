@@ -289,14 +289,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         analysisIntervalRef.current = null;
 
         if (pendingSelfEvaluationRef.current) {
-          // ✅ 케이스 1: 자기평가가 이미 완료 → 즉시 세션 생성 후 UI 정리
+          // 케이스 1: 자기평가가 이미 완료 → 즉시 세션 생성 후 UI 정리
           createSessionFromRefs(pendingSelfEvaluationRef.current);
           pendingSelfEvaluationRef.current = null;
           finishAnalysisUI();
         } else {
-          // ⏳ 케이스 2: 자기평가 아직 진행 중 → 대기 플래그 세우기
+          // 케이스 2: 자기평가 아직 진행 중 → 대기 플래그 세우기
           pendingAnalysisRef.current = true;
-          setAnalysisCompleted(true);
         }
       }
     }, 80); // 약 8초 (100 steps × 80ms)
@@ -308,7 +307,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSelfEvaluationCompleted(true);
 
     if (pendingAnalysisRef.current) {
-      // ✅ 케이스 2 완성: 분석이 이미 완료돼 있었음 → 즉시 세션 생성 + UI 정리
+      // 케이스 2 완성: 분석이 이미 완료돼 있었음 → 즉시 세션 생성 + UI 정리
       pendingAnalysisRef.current = false;
       createSessionFromRefs(evaluation);
       setIsAnalyzing(false);
@@ -317,11 +316,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSelfEvaluationCompleted(false);
       setAnalysisCompleted(false);
     } else {
-      // ⏳ 케이스 1 대기 중: 분석 아직 진행 중 → 임시 저장
+      // 케이스 1 대기 중: 분석 아직 진행 중 → 임시 저장
       // 분석 완료 시 startAnalysis 인터벌에서 세션 생성
       pendingSelfEvaluationRef.current = evaluation;
     }
-    // ✈️ 어느 케이스든 navigate('/dashboard')는 SelfEvaluationPage에서 호출
+    // 어느 케이스든 navigate('/dashboard')는 SelfEvaluationPage에서 호출
   };
 
   const completeAnalysis = () => {
@@ -449,7 +448,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ─── createSession: 발표 설정 완료 시 세션 먼저 생성 (자기평가 전) ─────────
   const createSession = (formData: any): string => {
-    // ✅ 재발표인 경우: 기존 세션 ID 유지, formData만 업데이트
+    // 재발표인 경우: 기존 세션 ID 유지, formData만 업데이트
     if (currentSessionId) {
       setSessions(prev => prev.map(s =>
         s.id === currentSessionId
@@ -459,7 +458,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return currentSessionId;
     }
     
-    // ✅ 새 발표인 경우: 새 세션 생성
+    // 새 발표인 경우: 새 세션 생성
     const newId = Date.now().toString();
     const newSession: Session = {
       id: newId,
@@ -469,7 +468,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       isFavorite: false,
       formData,
       selfEvaluation: {},
-      attempts: [] // ✅ 빈 배열로 시작! 분석 완료 시 첫 attempt 추가됨
+      attempts: [] // 빈 배열로 시작! 분석 완료 시 첫 attempt 추가됨
     };
     setSessions(prev => [newSession, ...prev]);
     setCurrentSessionId(newId);

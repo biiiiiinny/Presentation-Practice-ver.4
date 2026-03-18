@@ -10,7 +10,7 @@ export default function ResultsPage() {
   const { sessionId, attemptNumber } = useParams<{ sessionId: string; attemptNumber?: string }>();
   const { sessions, selfEvaluation, setCurrentSessionId } = useApp();
   
-  // ✅ 모든 Hook을 최상단에서 호출
+  // 모든 Hook을 최상단에서 호출
   const videoRef = useRef<HTMLVideoElement>(null);
   const [activeTab, setActiveTab] = useState<'overall' | 'voice' | 'posture'>('overall');
 
@@ -25,8 +25,8 @@ export default function ResultsPage() {
         : currentSession.attempts[currentSession.attempts.length - 1])
     : null;
 
-  // 🔍 디버깅
-  console.log('🔍 ResultsPage Debug:', {
+  // 디버깅
+  console.log('ResultsPage Debug:', {
     sessionId,
     attemptNumber,
     currentSession,

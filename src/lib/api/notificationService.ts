@@ -17,11 +17,11 @@ export const NotificationService = {
    */
   getNotifications: async (): Promise<Notification[]> => {
     if (isMockMode()) {
-      console.log('🔶 Mock 모드: 알림 목록 조회');
+      console.log('Mock 모드: 알림 목록 조회');
       return MOCK_NOTIFICATIONS;
     }
 
-    console.log('🔵 API 모드: 알림 목록 조회');
+    console.log('API 모드: 알림 목록 조회');
     const response = await apiClient.get<ApiResponse<Notification[]>>(
       '/api/notifications'
     );
@@ -33,7 +33,7 @@ export const NotificationService = {
    */
   markAsRead: async (id: number): Promise<ApiResponse> => {
     if (isMockMode()) {
-      console.log('🔶 Mock 모드: 알림 읽음 처리', id);
+      console.log('Mock 모드: 알림 읽음 처리', id);
 
       const notification = MOCK_NOTIFICATIONS.find((n) => n.id === id);
       if (notification) {
@@ -46,7 +46,7 @@ export const NotificationService = {
       };
     }
 
-    console.log('🔵 API 모드: 알림 읽음 처리', id);
+    console.log('API 모드: 알림 읽음 처리', id);
     const response = await apiClient.put<ApiResponse>(
       `/api/notifications/${id}/read`
     );
@@ -58,7 +58,7 @@ export const NotificationService = {
    */
   clearAll: async (): Promise<ApiResponse> => {
     if (isMockMode()) {
-      console.log('🔶 Mock 모드: 모든 알림 삭제');
+      console.log('Mock 모드: 모든 알림 삭제');
 
       MOCK_NOTIFICATIONS.length = 0;
 
@@ -68,7 +68,7 @@ export const NotificationService = {
       };
     }
 
-    console.log('🔵 API 모드: 모든 알림 삭제');
+    console.log('API 모드: 모든 알림 삭제');
     const response = await apiClient.delete<ApiResponse>('/api/notifications');
     return response.data;
   },
@@ -82,7 +82,7 @@ export const NotificationService = {
     message: string
   ): Promise<ApiResponse> => {
     if (isMockMode()) {
-      console.log('🔶 Mock 모드: 알림 생성', sessionId, title);
+      console.log('Mock 모드: 알림 생성', sessionId, title);
 
       const newNotification: Notification = {
         id: Date.now(),
@@ -102,7 +102,7 @@ export const NotificationService = {
       };
     }
 
-    console.log('🔵 API 모드: 알림 생성');
+    console.log('API 모드: 알림 생성');
     const response = await apiClient.post<ApiResponse>('/api/notifications', {
       sessionId,
       title,

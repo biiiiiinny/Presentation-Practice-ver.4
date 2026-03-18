@@ -22,12 +22,12 @@ class AuthService {
     try {
       // ─── Mock 모드 ───────────────────────────────────────────────────
       if (isMockMode()) {
-        console.log('🔶 Mock 모드: 회원가입');
+        console.log('Mock 모드: 회원가입');
         return await mockAuth.register(data.email, data.password, data.nickname);
       }
 
       // ─── 실제 API 호출 ────────────────────────────────────────────────
-      console.log('🔵 API 모드: 회원가입');
+      console.log('API 모드: 회원가입');
       const response = await apiClient.post<RegisterResponse>('/api/auth/register', {
         email: data.email,
         password: data.password,
@@ -58,7 +58,7 @@ class AuthService {
     try {
       // ─── Mock 모드 ───────────────────────────────────────────────────
       if (isMockMode()) {
-        console.log('🔶 Mock 모드: 로그인');
+        console.log('Mock 모드: 로그인');
         const response = await mockAuth.login(data.email, data.password);
         
         // Mock 로그인 성공 시 토큰과 사용자 정보 저장
@@ -71,7 +71,7 @@ class AuthService {
       }
 
       // ─── 실제 API 호출 ────────────────────────────────────────────────
-      console.log('🔵 API 모드: 로그인');
+      console.log('API 모드: 로그인');
       const response = await apiClient.post<LoginResponse>('/api/auth/login', {
         email: data.email,
         password: data.password,

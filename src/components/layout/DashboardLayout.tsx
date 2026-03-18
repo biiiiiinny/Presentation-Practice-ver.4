@@ -45,7 +45,7 @@ export function DashboardLayout() {
 
   const handleSessionSelect = (id: string) => {
     handleSelectSession(id);
-    // ✅ 최신 attempt로 이동
+    // 최신 attempt로 이동
     const session = sessions.find(s => s.id === id);
     const attemptNumber = session?.attempts.length || 1;
     navigate(`/presentation/results/${id}/${attemptNumber}`);
@@ -68,13 +68,9 @@ export function DashboardLayout() {
   };
 
   const handleNotificationClick = (notification: Notification) => {
-    // 알림을 읽음 처리
     markNotificationAsRead(notification.id);
-    // 알림 드롭다운 닫기
-    setShowNotifications(false);
-    // 해당 세션으로 이동
     handleSelectSession(notification.sessionId);
-    // ✅ 최신 attempt로 이동
+    // 최신 attempt로 이동
     const session = sessions.find(s => s.id === notification.sessionId);
     const attemptNumber = session?.attempts.length || 1;
     navigate(`/presentation/results/${notification.sessionId}/${attemptNumber}`);

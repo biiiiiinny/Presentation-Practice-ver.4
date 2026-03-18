@@ -15,7 +15,7 @@ export default function LoginPage() {
       const response = await authService.login({ email, password });
       
       if (response.success) {
-        console.log('✅ 로그인 성공:', response.user);
+        console.log('로그인 성공:', response.user);
         
         // "로그인 유지" 체크 시에만 정보 저장
         if (rememberMe) {
@@ -31,7 +31,7 @@ export default function LoginPage() {
         alert(response.message || '로그인에 실패했습니다.');
       }
     } catch (error: any) {
-      console.error('❌ 로그인 오류:', error);
+      console.error('로그인 오류:', error);
       alert('로그인 중 오류가 발생했습니다.');
     }
   };
