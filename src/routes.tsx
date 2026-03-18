@@ -6,7 +6,6 @@ import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import MainPage from './pages/MainPage';
 import PresentationSetupPage from './pages/PresentationSetupPage';
-import SelfEvaluationPage from './pages/SelfEvaluationPage';
 import ResultsPage from './pages/ResultsPage';
 import MyPage from './pages/MyPage';
 
@@ -31,7 +30,6 @@ export const router = createBrowserRouter([
         children: [
           { path: '/dashboard', element: <MainPage /> },
           { path: '/presentation/new', element: <PresentationSetupPage /> },
-          { path: '/presentation/:sessionId/self-evaluation', element: <SelfEvaluationPage /> },
           { path: '/presentation/results/:sessionId/:attemptNumber', element: <ResultsPage /> },
           { path: '/profile', element: <MyPage /> },
         ],

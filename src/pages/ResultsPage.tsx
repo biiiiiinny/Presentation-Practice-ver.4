@@ -61,23 +61,17 @@ export default function ResultsPage() {
     }
   }, [currentSession, navigate]);
 
-  // 세션은 있지만 attempt가 없으면 자기평가 페이지로 리다이렉트
-  useEffect(() => {
-    if (currentSession && currentSession.attempts.length === 0) {
-      // 자기평가가 완료되지 않았으므로 자기평가 페이지로 이동
-      navigate(`/presentation/${sessionId}/self-evaluation`);
-    }
-  }, [currentSession, sessionId, navigate]);
-
   // 모든 Hook 호출 후에 조건 체크
   // 세션을 찾지 못하면
   if (!currentSession) {
     return null; // useEffect에서 리다이렉트 처리
   }
 
-  // attempt를 찾지 못하면 (자기평가 미완료)
+  // attempt를 찾지 못하면
   if (!currentAttempt) {
-    return null; // useEffect에서 리다이렉트 처리
+    // 세션은 있지만 attempt가 없으면 대시보드로 이동
+    navigate('/dashboard');
+    return null;
   }
 
   // 타임라인 데이터 - 스크립트 기반 발표 내용 구조만
