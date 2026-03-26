@@ -139,13 +139,11 @@ export default function ResultsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
                 <h3 className="text-sm font-semibold text-blue-900 mb-2">평균 발화 속도</h3>
-                <p className="text-2xl font-bold text-blue-900">360 <span className="text-sm font-normal">글자/분</span></p>
-                <p className="text-xs text-blue-700 mt-1">권장: 300글자/분</p>
+                <p className="text-2xl font-bold text-blue-900">360<span className="text-sm font-normal">글자/분</span></p>
               </div>
               <div className="bg-green-50 rounded-lg p-4 border border-green-100">
                 <h3 className="text-sm font-semibold text-green-900 mb-2">정면 응시 비율</h3>
                 <p className="text-2xl font-bold text-green-900">78%</p>
-                <p className="text-xs text-green-700 mt-1">권장: 70% 이상</p>
               </div>
             </div>
 
