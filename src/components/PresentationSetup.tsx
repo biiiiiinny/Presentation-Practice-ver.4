@@ -118,7 +118,7 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
     if (!videoFile) newErrors.video = '발표 영상을 필수로 첨부해주세요.';
     if (!formData.topic.trim()) newErrors.topic = '발표 주제를 필수로 기입해주세요.';
     if (!formData.purpose) newErrors.purpose = '발표 목적을 필수로 선택해주세요.';
-    if (selfEvaluation.eyeContact + selfEvaluation.posture + selfEvaluation.voice + selfEvaluation.content < 10) newErrors.selfEvaluation = '자기평가 점수를 입력해주세요.';
+    if (!selfEvaluation.eyeContact || !selfEvaluation.posture || !selfEvaluation.voice || !selfEvaluation.content) newErrors.selfEvaluation = '자기평가 점수를 입력해주세요.';
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
