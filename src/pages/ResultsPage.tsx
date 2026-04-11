@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Timeline } from '../components/Timeline';
 import { ComparisonChart } from '../components/ComparisonChart';
 import { VideoPlayer } from '../components/VideoPlayer';
-import { Mic, User, CheckCircle, AlertCircle } from 'lucide-react';
+import { Mic, User } from 'lucide-react';
 
 export default function ResultsPage() {
   const navigate = useNavigate();

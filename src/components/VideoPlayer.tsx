@@ -24,7 +24,6 @@ export function VideoPlayer({ videoUrl, currentTime, onTimeUpdate, className }: 
   const [internalTime, setInternalTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [buffered, setBuffered] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
   const [hoverIssue, setHoverIssue] = useState<IssueSegment | null>(null);
 
@@ -132,10 +131,8 @@ export function VideoPlayer({ videoUrl, currentTime, onTimeUpdate, className }: 
   };
 
   const handleProgressBarMouseLeave = () => {
-    if (!isDragging) {
-      setHoverTime(null);
-      setHoverIssue(null);
-    }
+    setHoverTime(null);
+    setHoverIssue(null);
   };
 
   const formatTime = (seconds: number) => {

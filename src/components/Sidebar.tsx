@@ -12,7 +12,6 @@ import {
   LogOut,
   ChevronDown,
   ChevronUp,
-  RotateCcw,
   Bell,
   LayoutDashboard,
   BarChart3
