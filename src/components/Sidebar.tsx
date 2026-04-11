@@ -14,8 +14,10 @@ import {
   ChevronUp,
   RotateCcw,
   Bell,
-  LayoutDashboard
+  LayoutDashboard,
+  BarChart3
 } from 'lucide-react';
+import { useNavigate } from 'react-router';
 import { Session, Notification } from '../contexts/AppContext';
 
 interface SidebarProps {
@@ -341,7 +343,9 @@ function SessionItem({
   onDeleteAttempt,
 }: SessionItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const navigate = useNavigate();
   const hasMultipleAttempts = session.attempts && session.attempts.length > 1;
+  const hasTwoAttempts = session.attempts && session.attempts.length === 2;
 
   return (
     <div
@@ -440,6 +444,22 @@ function SessionItem({
               </div>
             </div>
           ))}
+          
+          {/* 2회차가 있을 때 비교 버튼 */}
+          {hasTwoAttempts && (
+            <div className="px-2 mt-2 mb-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/presentation/compare/${session.id}`);
+                }}
+                className="w-full px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors flex items-center justify-center gap-1.5 text-xs font-medium"
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                1회차 vs 2회차 비교
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
