@@ -4,7 +4,6 @@ interface TimelineEvent {
   time: string;
   event: string;
   type: 'start' | 'content' | 'end';
-  rating?: '최하' | '하' | '중' | '상' | '최상';
 }
 
 interface TimelineProps {
@@ -52,23 +51,6 @@ export function Timeline({ data, onTimeClick }: TimelineProps) {
     }
   };
 
-  const getRatingColor = (rating?: string) => {
-    switch (rating) {
-      case '최상':
-        return 'bg-green-500 text-white';
-      case '상':
-        return 'bg-blue-500 text-white';
-      case '중':
-        return 'bg-yellow-500 text-white';
-      case '하':
-        return 'bg-orange-500 text-white';
-      case '최하':
-        return 'bg-red-500 text-white';
-      default:
-        return 'bg-slate-400 text-white';
-    }
-  };
-
   return (
     <div className="relative">
       {data.map((item, index) => (
@@ -97,16 +79,9 @@ export function Timeline({ data, onTimeClick }: TimelineProps) {
           {/* 이벤트 정보 */}
           <div className="flex-1 pt-0.5">
             <div className="bg-slate-50 rounded-lg p-3 hover:bg-blue-50 transition-colors">
-              <div className="flex items-center justify-between gap-3">
-                <h4 className="text-sm font-semibold text-slate-900">
-                  {item.event}
-                </h4>
-                {item.rating && (
-                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getRatingColor(item.rating)}`}>
-                    {item.rating}
-                  </span>
-                )}
-              </div>
+              <h4 className="text-sm font-semibold text-slate-900">
+                {item.event}
+              </h4>
             </div>
           </div>
         </div>
