@@ -1,4 +1,5 @@
-import { createBrowserRouter, Navigate } from 'react-router';
+import { createBrowserRouter, Navigate, Outlet } from 'react-router';
+import { AppProvider } from './contexts/AppContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import LandingPage from './pages/LandingPage';
@@ -7,37 +8,53 @@ import SignupPage from './pages/SignupPage';
 import MainPage from './pages/MainPage';
 import PresentationSetupPage from './pages/PresentationSetupPage';
 import ResultsPage from './pages/ResultsPage';
+import ComparisonPage from './pages/ComparisonPage';
 import MyPage from './pages/MyPage';
+
+// Root wrapper with AppProvider
+function RootLayout() {
+  return (
+    <AppProvider>
+      <Outlet />
+    </AppProvider>
+  );
+}
 
 export const router = createBrowserRouter([
   {
-    path: '/',
-    element: <LandingPage />,
-  },
-  {
-    path: '/login',
-    element: <LoginPage />,
-  },
-  {
-    path: '/signup',
-    element: <SignupPage />,
-  },
-  {
-    element: <ProtectedRoute />,
+    element: <RootLayout />,
     children: [
       {
-        element: <DashboardLayout />,
+        path: '/',
+        element: <LandingPage />,
+      },
+      {
+        path: '/login',
+        element: <LoginPage />,
+      },
+      {
+        path: '/signup',
+        element: <SignupPage />,
+      },
+      {
+        element: <ProtectedRoute />,
         children: [
-          { path: '/dashboard', element: <MainPage /> },
-          { path: '/presentation/new', element: <PresentationSetupPage /> },
-          { path: '/presentation/results/:sessionId/:attemptNumber', element: <ResultsPage /> },
-          { path: '/profile', element: <MyPage /> },
+          {
+            element: <DashboardLayout />,
+            children: [
+              { path: '/dashboard', element: <MainPage /> },
+              { path: '/presentation/new', element: <PresentationSetupPage /> },
+              { path: '/presentation/results/:sessionId/:attemptNumber', element: <ResultsPage /> },
+              { path: '/presentation/compare/:sessionId', element: <ComparisonPage /> },
+              { path: '/profile', element: <MyPage /> },
+            ],
+          },
         ],
       },
+      {
+        path: '*',
+        element: <Navigate to="/" replace />,
+      },
     ],
-  },
-  {
-    path: '*',
-    element: <Navigate to="/" replace />,
   },
 ]);
