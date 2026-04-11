@@ -7,6 +7,12 @@ export interface Attempt {
   selfEvaluation?: Record<string, number>;
   videoFile?: File | null;
   videoUrl?: string;
+  analysisResults?: {
+    speechRate: number; // 발화 속도 (글자/분)
+    eyeContact: number; // 정면 응시 비율 (%)
+    duration: string; // 발표 시간 (M:SS)
+    confidence: number; // 자신감 지수 (점수)
+  };
 }
 
 export interface Session {
@@ -36,6 +42,7 @@ interface AppContextType {
   savedLoginEmail: string;
   savedLoginPassword: string;
   saveLoginInfo: (email: string, password: string) => void;
+  userEmail: string;
   sessions: Session[];
   setSessions: (sessions: Session[] | ((prev: Session[]) => Session[])) => void;
   currentSessionId: string | null;
@@ -220,12 +227,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSessions(prev => prev.map(s => {
         if (s.id === sessionId) {
           attemptNumber = s.attempts.length + 1;
+          
+          // sessionId를 기반으로 일관성 있는 분석 결과 생성
+          const hash = sessionId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+          const seed = hash + attemptNumber;
+          
+          // 1회차 기본값
+          const baseSpeechRate = 350 + (seed % 30);
+          const baseEyeContact = 75 + (seed % 10);
+          const baseDurationMin = 8 + (seed % 2);
+          const baseDurationSec = (seed % 4) * 15;
+          const baseConfidence = 72 + (seed % 15);
+          
+          // 2회차 이상이면 개선된 값
+          let speechRate, eyeContact, durationMin, durationSec, confidence;
+          
+          if (attemptNumber === 1) {
+            speechRate = baseSpeechRate;
+            eyeContact = baseEyeContact;
+            durationMin = baseDurationMin;
+            durationSec = baseDurationSec;
+            confidence = baseConfidence;
+          } else {
+            speechRate = baseSpeechRate - 30 - (seed % 20); // 발화 속도 감소 (개선)
+            eyeContact = baseEyeContact + 5 + (seed % 10); // 정면 응시 증가
+            const totalSec = (baseDurationMin * 60 + baseDurationSec) + 30 + (seed % 30);
+            durationMin = Math.floor(totalSec / 60);
+            durationSec = totalSec % 60;
+            confidence = baseConfidence + 10 + (seed % 8); // 자신감 증가
+          }
+          
           return {
             ...s,
             date: new Date().toISOString(),
             score: 86,
             selfEvaluation: evaluation,
-            // Session의 videoUrl은 가장 최근 영상으로 업데이트 (하위 호환)
             videoUrl: videoUrl || s.videoUrl,
             attempts: [
               ...s.attempts,
@@ -234,8 +270,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 date: new Date().toISOString(),
                 score: 86,
                 selfEvaluation: evaluation,
-                // 각 attempt마다 videoUrl 저장
-                videoUrl: videoUrl
+                videoUrl: videoUrl,
+                analysisResults: {
+                  speechRate: speechRate,
+                  eyeContact: eyeContact,
+                  duration: `${durationMin}:${durationSec.toString().padStart(2, '0')}`,
+                  confidence: confidence
+                }
               }
             ]
           };
@@ -484,6 +525,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSavedLoginEmail(email);
       setSavedLoginPassword(password);
     },
+    userEmail: savedLoginEmail,
     sessions,
     setSessions,
     currentSessionId,
