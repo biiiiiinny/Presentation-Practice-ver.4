@@ -15,9 +15,6 @@ export default function MainPage() {
 
   // 통계 계산
   const totalPresentations = sessions.length;
-  const averageScore = sessions.length > 0 
-    ? Math.round(sessions.reduce((sum, s) => sum + s.score, 0) / sessions.length)
-    : 0;
   const favoriteCount = sessions.filter(s => s.isFavorite).length;
 
   // 최근 세션 3개
@@ -37,7 +34,7 @@ export default function MainPage() {
         </div>
 
         {/* 통계 카드 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -49,21 +46,6 @@ export default function MainPage() {
               <div className="text-2xl font-bold">{totalPresentations}회</div>
               <p className="text-xs text-muted-foreground">
                 지금까지 연습한 발표
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                평균 점수
-              </CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{averageScore}점</div>
-              <p className="text-xs text-muted-foreground">
-                AI 평가 평균
               </p>
             </CardContent>
           </Card>
@@ -120,8 +102,8 @@ export default function MainPage() {
                     navigate(`/presentation/results/${session.id}/${attemptNumber}`);
                   }}
                 >
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
+                  <CardHeader className="pb-6">
+                    <div className="flex items-start justify-between mb-3">
                       <CardTitle className="text-lg line-clamp-2">
                         {session.title}
                       </CardTitle>
@@ -129,18 +111,10 @@ export default function MainPage() {
                         <Star className="w-5 h-5 text-yellow-500 fill-yellow-500 flex-shrink-0 ml-2" />
                       )}
                     </div>
-                    <CardDescription>
+                    <CardDescription className="text-sm mb-2">
                       {new Date(session.date).toLocaleDateString('ko-KR')}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-600">AI 평가</span>
-                      <span className="text-2xl font-bold text-blue-600">
-                        {session.score}점
-                      </span>
-                    </div>
-                  </CardContent>
                 </Card>
               ))}
             </div>
