@@ -338,21 +338,27 @@ export default function ResultsPage() {
               <div className="flex items-center gap-4">
                 <h2 className="text-base font-bold text-slate-900">타임라인</h2>
               </div>
-              <button
-                onClick={handleRetry}
-                disabled={currentSession.attempts.length >= 2}
-                className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-sm ${
-                  currentSession.attempts.length >= 2
-                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                    : 'bg-blue-900 text-white hover:bg-blue-800'
-                }`}
-                title={currentSession.attempts.length >= 2 ? '최대 2회차까지만 연습 가능합니다' : ''}
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                다시 연습하기 {currentSession.attempts.length >= 2 && '(불가)'}
-              </button>
+              {currentSession.attempts.length >= 2 ? (
+                <button
+                  onClick={() => navigate(`/presentation/compare/${sessionId}`)}
+                  className="px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-sm bg-green-700 text-white hover:bg-green-600"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  1회차 vs 2회차 비교
+                </button>
+              ) : (
+                <button
+                  onClick={handleRetry}
+                  className="px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-sm bg-blue-900 text-white hover:bg-blue-800"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  다시 연습하기
+                </button>
+              )}
             </div>
             <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
               <Timeline data={timelineData} onTimeClick={handleTimelineClick} />
