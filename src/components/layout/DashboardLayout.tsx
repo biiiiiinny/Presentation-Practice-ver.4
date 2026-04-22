@@ -68,6 +68,10 @@ export function DashboardLayout() {
 
   const handleNotificationClick = (notification: Notification) => {
     markNotificationAsRead(notification.id);
+    if (notification.sessionId === 'achievement') {
+      navigate('/profile');
+      return;
+    }
     handleSelectSession(notification.sessionId);
     // 최신 attempt로 이동
     const session = sessions.find(s => s.id === notification.sessionId);

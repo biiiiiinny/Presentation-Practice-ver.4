@@ -56,21 +56,21 @@ export function MyPage({ onBack }: MyPageProps) {
         totalRetries >= 1
           ? new Date(
               sessions.find((s) => s.attempts.length > 1)
-                ?.attempts[1]?.timestamp || sessions[0]?.date,
+                ?.attempts[1]?.date || sessions[0]?.date,
             ).toLocaleDateString("ko-KR")
           : undefined,
       achieved: totalRetries >= 1,
     },
     {
-      title: "10번째 발표 달성",
+      title: "5번째 발표 달성",
       icon: "💪",
       date:
-        totalPresentations >= 10
+        totalPresentations >= 5
           ? new Date(
-              sessions[sessions.length - 10].date,
+              sessions[sessions.length - 5].date,
             ).toLocaleDateString("ko-KR")
           : undefined,
-      achieved: totalPresentations >= 10,
+      achieved: totalPresentations >= 5,
     },
   ];
 

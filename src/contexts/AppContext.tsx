@@ -98,6 +98,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [analysisCompleted, setAnalysisCompleted] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
+  // ─── 업적 알림 추적 ──────────────────────────────────────────────────────
+  const notifiedAchievementsRef = useRef<Set<string>>(new Set());
+  const isFirstAchievementCheck = useRef(true);
+
   // ─── Refs: 페이지 이동 후에도 유지 ───────────────────────────────────────
   const analysisIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // 자기평가가 먼저 완료됐을 때 임시 저장 (분석 완료 시 세션 생성에 사용)
@@ -150,17 +154,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
         feedbackTone: 'kind'
       },
       attempts: [
-        { 
-          id: '2-1', 
-          date: '2024-01-27', 
-          score: 82, 
-          selfEvaluation: { eyeContact: 3, voice: 4, posture: 4, content: 5 }
+        {
+          id: '2-1',
+          date: '2024-01-27',
+          score: 52,
+          selfEvaluation: { eyeContact: 2, voice: 2, posture: 2, content: 3 },
+          analysisResults: {
+            speechRate: 480,   // 빠름 (기준 초과 +80)
+            eyeContact: 45,    // 낮음 (기준 70% 미달)
+            duration: '6:20',  // 짧음 (목표 15분 대비 미달)
+            confidence: 48     // 낮음 (기준 70점 미달)
+          }
         },
-        { 
-          id: '2-2', 
-          date: '2024-01-28', 
-          score: 88, 
-          selfEvaluation: { eyeContact: 4, voice: 5, posture: 4, content: 5 }
+        {
+          id: '2-2',
+          date: '2024-01-28',
+          score: 91,
+          selfEvaluation: { eyeContact: 5, voice: 5, posture: 4, content: 5 },
+          analysisResults: {
+            speechRate: 340,   // 적정 (기준 범위 내)
+            eyeContact: 88,    // 높음 (기준 초과)
+            duration: '14:30', // 적정 (목표 15분 근접)
+            confidence: 85     // 높음 (기준 초과)
+          }
         }
       ]
     },
@@ -211,6 +227,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ]
     }
   ]);
+
+  // ─── 업적 달성 감지 → 알림 추가 ─────────────────────────────────────────
+  useEffect(() => {
+    const totalPresentations = sessions.length;
+    const totalRetries = sessions.reduce((sum, s) => sum + (s.attempts.length - 1), 0);
+
+    const achievements = [
+      { title: '첫 발표 완료',     achieved: totalPresentations >= 1 },
+      { title: '첫 재발표 완료',   achieved: totalRetries >= 1 },
+      { title: '5번째 발표 달성', achieved: totalPresentations >= 5 },
+    ];
+
+    if (isFirstAchievementCheck.current) {
+      // 앱 최초 로드 시: 이미 달성된 업적은 알림 없이 시드만 등록
+      isFirstAchievementCheck.current = false;
+      achievements.forEach(({ title, achieved }) => {
+        if (achieved) notifiedAchievementsRef.current.add(title);
+      });
+      return;
+    }
+
+    // 이후 sessions 변경 시: 새로 달성된 업적에만 알림 추가
+    achievements.forEach(({ title, achieved }) => {
+      if (achieved && !notifiedAchievementsRef.current.has(title)) {
+        notifiedAchievementsRef.current.add(title);
+        setNotifications(prev => [{
+          id: Date.now().toString(),
+          sessionId: 'achievement',
+          title: '🏆 업적 달성',
+          message: `"${title}" 업적을 달성했습니다! 마이페이지에서 확인하세요.`,
+          date: new Date().toISOString(),
+          isRead: false,
+        }, ...prev]);
+      }
+    });
+  }, [sessions]);
 
   // ─── 세션 생성 (ref 기반으로 최신 formData / sessionId 사용) ─────────────
   const createSessionFromRefs = (evaluation: Record<string, number>): number => {
