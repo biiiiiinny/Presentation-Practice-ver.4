@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Upload, Video, X, Presentation, Target, Users, Clock, MessageSquare, CheckCircle, Eye, User, Mic, FileText } from 'lucide-react';
+import { Upload, Video, X, Presentation, Target, Users, Clock, MessageSquare, CheckCircle } from 'lucide-react';
 
 interface PresentationSetupProps {
   onSubmit: (data: any) => void;
@@ -14,13 +14,10 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
   const videoRef = useRef<HTMLDivElement>(null);
   const topicRef = useRef<HTMLDivElement>(null);
   const purposeRef = useRef<HTMLDivElement>(null);
-  const selfEvaluationRef = useRef<HTMLDivElement>(null);
-
-  const [errors, setErrors] = useState<{ 
-    video?: string; 
-    topic?: string; 
+  const [errors, setErrors] = useState<{
+    video?: string;
+    topic?: string;
     purpose?: string;
-    selfEvaluation?: string;
   }>({});
 
   const [formData, setFormData] = useState({
@@ -30,14 +27,6 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
     audienceKnowledge: existingFormData?.audienceKnowledge || '',
     timeLimit: existingFormData?.timeLimit || '',
     feedbackTone: existingFormData?.feedbackTone || ''
-  });
-
-  // 자기평가 상태 추가
-  const [selfEvaluation, setSelfEvaluation] = useState({
-    eyeContact: 0,
-    posture: 0,
-    voice: 0,
-    content: 0
   });
 
   const purposes = [
@@ -114,15 +103,13 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const newErrors: { video?: string; topic?: string; purpose?: string; selfEvaluation?: string } = {};
+    const newErrors: { video?: string; topic?: string; purpose?: string } = {};
     if (!videoFile) newErrors.video = '발표 영상을 필수로 첨부해주세요.';
     if (!formData.topic.trim()) newErrors.topic = '발표 주제를 필수로 기입해주세요.';
     if (!formData.purpose) newErrors.purpose = '발표 목적을 필수로 선택해주세요.';
-    if (!selfEvaluation.eyeContact || !selfEvaluation.posture || !selfEvaluation.voice || !selfEvaluation.content) newErrors.selfEvaluation = '자기평가 점수를 입력해주세요.';
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      // 첫 번째 에러 필드로 스크롤
       if (newErrors.video) {
         videoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       } else if (newErrors.topic) {
@@ -130,14 +117,12 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
         setTimeout(() => topicRef.current?.querySelector('input')?.focus(), 400);
       } else if (newErrors.purpose) {
         purposeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else if (newErrors.selfEvaluation) {
-        selfEvaluationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
       return;
     }
 
     setErrors({});
-    onSubmit({ ...formData, videoFile, selfEvaluation });
+    onSubmit({ ...formData, videoFile });
   };
 
   const handleCriteriaChange = (criterion: string, value: string) => {
@@ -167,13 +152,6 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
     });
   };
 
-  const handleRatingChange = (criterion: string, rating: number) => {
-    setSelfEvaluation(prev => ({
-      ...prev,
-      [criterion]: rating
-    }));
-  };
-
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
@@ -188,7 +166,7 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
           <p className="text-slate-600 text-lg">
             {isRetry 
               ? '새로운 발표 영상을 업로드하여 다시 연습해보세요' 
-              : 'AI가 당신의 발표를 분석하고 피드백을 제공합니다'
+              : '발표 영상을 업로드하고 6가지 지표로 발표를 진단해보세요'
             }
           </p>
         </div>
@@ -499,178 +477,6 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
                 ))}
               </select>
             </div>
-          </div>
-
-          {/* 자기평가 섹션 */}
-          <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200" ref={selfEvaluationRef}>
-            <div className="flex items-center gap-3 mb-2">
-              <CheckCircle className="w-6 h-6 text-indigo-600" />
-              <h2 className="text-xl font-bold text-slate-900">자기평가</h2>
-              <span className="text-xs text-red-500 bg-red-50 px-2 py-1 rounded font-semibold">필수</span>
-            </div>
-            <p className="text-sm text-slate-600 mb-6">
-              발표를 마친 후 자신의 발표를 객관적으로 평가해보세요. AI 평가와 비교하여 인사이트를 얻을 수 있습니다.
-            </p>
-
-            <div className="space-y-4">
-              {/* 시선 처리 */}
-              <div className="p-5 rounded-xl border-2 border-slate-200 bg-slate-50">
-                <div className="flex items-start gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                    <Eye className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-slate-900 mb-1">시선 처리</h3>
-                    <p className="text-sm text-slate-600">청중과의 아이컨택은 적절했나요?</p>
-                  </div>
-                </div>
-                <div className="flex gap-2 justify-center items-center">
-                  <span className="text-xs text-slate-500 mr-2">매우 불만족</span>
-                  {[
-                    { value: 1, label: '1', tooltip: '매우 불만족' },
-                    { value: 2, label: '2', tooltip: '불만족' },
-                    { value: 3, label: '3', tooltip: '보통' },
-                    { value: 4, label: '4', tooltip: '만족' },
-                    { value: 5, label: '5', tooltip: '매우 만족' }
-                  ].map((rating) => (
-                    <button
-                      key={rating.value}
-                      type="button"
-                      onClick={() => handleRatingChange('eyeContact', rating.value)}
-                      title={rating.tooltip}
-                      className={`w-16 h-16 rounded-xl border-2 font-semibold text-sm transition-all flex items-center justify-center ${
-                        selfEvaluation.eyeContact === rating.value
-                          ? 'border-blue-500 bg-blue-500 text-white shadow-lg scale-105'
-                          : 'border-slate-300 bg-white text-slate-400 hover:border-blue-300 hover:text-blue-500'
-                      }`}
-                    >
-                      {rating.label}
-                    </button>
-                  ))}
-                  <span className="text-xs text-slate-500 ml-2">매우 만족</span>
-                </div>
-              </div>
-
-              {/* 자세 및 제스처 */}
-              <div className="p-5 rounded-xl border-2 border-slate-200 bg-slate-50">
-                <div className="flex items-start gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                    <User className="w-5 h-5 text-green-600" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-slate-900 mb-1">자세 및 제스처</h3>
-                    <p className="text-sm text-slate-600">발표 자세와 제스처가 자연스러웠나요?</p>
-                  </div>
-                </div>
-                <div className="flex gap-2 justify-center items-center">
-                  <span className="text-xs text-slate-500 mr-2">매우 불만족</span>
-                  {[
-                    { value: 1, label: '1', tooltip: '매우 불만족' },
-                    { value: 2, label: '2', tooltip: '불만족' },
-                    { value: 3, label: '3', tooltip: '보통' },
-                    { value: 4, label: '4', tooltip: '만족' },
-                    { value: 5, label: '5', tooltip: '매우 만족' }
-                  ].map((rating) => (
-                    <button
-                      key={rating.value}
-                      type="button"
-                      onClick={() => handleRatingChange('posture', rating.value)}
-                      title={rating.tooltip}
-                      className={`w-16 h-16 rounded-xl border-2 font-semibold text-sm transition-all flex items-center justify-center ${
-                        selfEvaluation.posture === rating.value
-                          ? 'border-green-500 bg-green-500 text-white shadow-lg scale-105'
-                          : 'border-slate-300 bg-white text-slate-400 hover:border-green-300 hover:text-green-500'
-                      }`}
-                    >
-                      {rating.label}
-                    </button>
-                  ))}
-                  <span className="text-xs text-slate-500 ml-2">매우 만족</span>
-                </div>
-              </div>
-
-              {/* 음성 및 표현 */}
-              <div className="p-5 rounded-xl border-2 border-slate-200 bg-slate-50">
-                <div className="flex items-start gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
-                    <Mic className="w-5 h-5 text-purple-600" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-slate-900 mb-1">음성 및 표현</h3>
-                    <p className="text-sm text-slate-600">절거나 잉여표현 없이 명확했나요?</p>
-                  </div>
-                </div>
-                <div className="flex gap-2 justify-center items-center">
-                  <span className="text-xs text-slate-500 mr-2">매우 불만족</span>
-                  {[
-                    { value: 1, label: '1', tooltip: '매우 불만족' },
-                    { value: 2, label: '2', tooltip: '불만족' },
-                    { value: 3, label: '3', tooltip: '보통' },
-                    { value: 4, label: '4', tooltip: '만족' },
-                    { value: 5, label: '5', tooltip: '매우 만족' }
-                  ].map((rating) => (
-                    <button
-                      key={rating.value}
-                      type="button"
-                      onClick={() => handleRatingChange('voice', rating.value)}
-                      title={rating.tooltip}
-                      className={`w-16 h-16 rounded-xl border-2 font-semibold text-sm transition-all flex items-center justify-center ${
-                        selfEvaluation.voice === rating.value
-                          ? 'border-purple-500 bg-purple-500 text-white shadow-lg scale-105'
-                          : 'border-slate-300 bg-white text-slate-400 hover:border-purple-300 hover:text-purple-500'
-                      }`}
-                    >
-                      {rating.label}
-                    </button>
-                  ))}
-                  <span className="text-xs text-slate-500 ml-2">매우 만족</span>
-                </div>
-              </div>
-
-              {/* 발표 내용 */}
-              <div className="p-5 rounded-xl border-2 border-slate-200 bg-slate-50">
-                <div className="flex items-start gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
-                    <FileText className="w-5 h-5 text-orange-600" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-slate-900 mb-1">발표 내용</h3>
-                    <p className="text-sm text-slate-600">논리적이고 명확한 내용 전달이 되었나요?</p>
-                  </div>
-                </div>
-                <div className="flex gap-2 justify-center items-center">
-                  <span className="text-xs text-slate-500 mr-2">매우 불만족</span>
-                  {[
-                    { value: 1, label: '1', tooltip: '매우 불만족' },
-                    { value: 2, label: '2', tooltip: '불만족' },
-                    { value: 3, label: '3', tooltip: '보통' },
-                    { value: 4, label: '4', tooltip: '만족' },
-                    { value: 5, label: '5', tooltip: '매우 만족' }
-                  ].map((rating) => (
-                    <button
-                      key={rating.value}
-                      type="button"
-                      onClick={() => handleRatingChange('content', rating.value)}
-                      title={rating.tooltip}
-                      className={`w-16 h-16 rounded-xl border-2 font-semibold text-sm transition-all flex items-center justify-center ${
-                        selfEvaluation.content === rating.value
-                          ? 'border-orange-500 bg-orange-500 text-white shadow-lg scale-105'
-                          : 'border-slate-300 bg-white text-slate-400 hover:border-orange-300 hover:text-orange-500'
-                      }`}
-                    >
-                      {rating.label}
-                    </button>
-                  ))}
-                  <span className="text-xs text-slate-500 ml-2">매우 만족</span>
-                </div>
-              </div>
-            </div>
-
-            {errors.selfEvaluation && (
-              <p className="mt-4 text-sm text-red-600 flex items-center gap-1 bg-red-50 p-3 rounded-lg">
-                <span>⚠</span> {errors.selfEvaluation}
-              </p>
-            )}
           </div>
 
           {/* 제출 버튼 */}
