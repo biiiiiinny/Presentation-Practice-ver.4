@@ -1,5 +1,6 @@
 import { useNavigate, useParams } from 'react-router';
 import { useApp } from '../contexts/AppContext';
+import { VideoPlayer } from '../components/VideoPlayer';
 import {
   ArrowLeft, TrendingUp, TrendingDown, Minus, Eye, Mic,
   CheckCircle, XCircle, AlertTriangle, Clock, Award,
@@ -311,6 +312,33 @@ export default function ComparisonPage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+
+        {/* ⓪ 영상 비교 */}
+        <div className="bg-white rounded-xl shadow-lg p-6 border border-slate-200">
+          <h2 className="text-xl font-bold text-slate-900 mb-4">영상 비교</h2>
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <p className="text-sm font-semibold text-slate-600 mb-2">1회차</p>
+              {attempt1.videoUrl ? (
+                <VideoPlayer videoUrl={attempt1.videoUrl} />
+              ) : (
+                <div className="bg-slate-100 rounded-xl aspect-video flex items-center justify-center">
+                  <span className="text-slate-400 text-sm">업로드된 영상 없음</span>
+                </div>
+              )}
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-600 mb-2">2회차</p>
+              {attempt2.videoUrl ? (
+                <VideoPlayer videoUrl={attempt2.videoUrl} />
+              ) : (
+                <div className="bg-slate-100 rounded-xl aspect-video flex items-center justify-center">
+                  <span className="text-slate-400 text-sm">업로드된 영상 없음</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* ① 종합 비교 차트 (레이더) */}
         <div className="bg-white rounded-xl shadow-lg p-6 border border-slate-200">
