@@ -1,81 +1,76 @@
 import { useNavigate, useParams } from 'react-router';
 import { useApp } from '../contexts/AppContext';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Timeline } from '../components/Timeline';
-import { ComparisonChart } from '../components/ComparisonChart';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Mic, User } from 'lucide-react';
 
 export default function ResultsPage() {
   const navigate = useNavigate();
   const { sessionId, attemptNumber } = useParams<{ sessionId: string; attemptNumber?: string }>();
-  const { sessions, selfEvaluation, setCurrentSessionId } = useApp();
-  
-  // 모든 Hook을 최상단에서 호출
+  const { sessions, setCurrentSessionId } = useApp();
+
   const [activeTab, setActiveTab] = useState<'overall' | 'voice' | 'posture'>('overall');
   const [currentVideoTime, setCurrentVideoTime] = useState(0);
 
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const overallRef = useRef<HTMLDivElement>(null);
+  const voiceRef = useRef<HTMLDivElement>(null);
+  const postureRef = useRef<HTMLDivElement>(null);
+
   const currentSession = sessions.find(s => s.id === sessionId);
 
-  // 현재 보여줄 attempt 찾기
   const currentAttempt = currentSession && currentSession.attempts.length > 0
     ? (attemptNumber
-        // attemptNumber가 있으면 해당 회차 찾기 (예: "2" → 인덱스 1)
         ? currentSession.attempts[parseInt(attemptNumber) - 1]
-        // attemptNumber가 없으면 최신 attempt
         : currentSession.attempts[currentSession.attempts.length - 1])
     : null;
 
-  // 디버깅
-  console.log('ResultsPage Debug:', {
-    sessionId,
-    attemptNumber,
-    currentSession,
-    attemptsCount: currentSession?.attempts.length,
-    currentAttempt,
-    allAttempts: currentSession?.attempts
-  });
-
-  // 자기평가 vs AI 평가 비교 데이터 (항상 호출되어야 함)
-  const evaluation = currentAttempt?.selfEvaluation || selfEvaluation;
-  const comparisonData = useMemo(() => {
-    const eyeContact = evaluation?.eyeContact || 3;
-    const voice = evaluation?.voice || 4;
-    const posture = evaluation?.posture || 4;
-    const content = evaluation?.content || 5;
-    
-    // 고유한 키 생성 - sessionId가 없을 경우를 대비
-    const uniqueId = sessionId || 'temp';
-    
-    return [
-      { id: `eye-contact-${uniqueId}`, category: '시선', self: eyeContact, ai: 4 },
-      { id: `voice-${uniqueId}`, category: '음성', self: voice, ai: 4 },
-      { id: `posture-${uniqueId}`, category: '자세', self: posture, ai: 5 },
-      { id: `content-${uniqueId}`, category: '내용', self: content, ai: 4 }
-    ];
-  }, [evaluation, sessionId]);
-
-  // 세션을 찾지 못하면 대시보드로 리다이렉트
   useEffect(() => {
     if (!currentSession) {
       navigate('/dashboard');
     }
   }, [currentSession, navigate]);
 
-  // 모든 Hook 호출 후에 조건 체크
-  // 세션을 찾지 못하면
-  if (!currentSession) {
-    return null; // useEffect에서 다이렉트 처리
-  }
+  // IntersectionObserver로 스크롤 위치에 따라 활성 탭 업데이트
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
 
-  // attempt를 찾지 못하면
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const id = entry.target.getAttribute('data-section');
+            if (id === 'overall' || id === 'voice' || id === 'posture') {
+              setActiveTab(id);
+            }
+          }
+        });
+      },
+      { root: container, threshold: 0.4 }
+    );
+
+    if (overallRef.current) observer.observe(overallRef.current);
+    if (voiceRef.current) observer.observe(voiceRef.current);
+    if (postureRef.current) observer.observe(postureRef.current);
+
+    return () => observer.disconnect();
+  }, [currentAttempt]);
+
+  if (!currentSession) return null;
   if (!currentAttempt) {
-    // 세션은 있지만 attempt가 없으면 대시보드로 이동
     navigate('/dashboard');
     return null;
   }
 
-  // 타임라인 데이터 - 스크립트 기반 발표 내용 구조만
+  const analysisResults = currentAttempt?.analysisResults || {
+    speechRate: 360,
+    eyeContact: 78,
+    duration: '8:30',
+    confidence: 75
+  };
+
   const timelineData = [
     { time: '0:00', event: '발표 시작', type: 'start' as const },
     { time: '0:30', event: '도입부 - 주제 소개', type: 'content' as const },
@@ -86,236 +81,36 @@ export default function ResultsPage() {
     { time: '8:30', event: '발표 종료', type: 'end' as const }
   ];
 
-  // Mock 스크립트 데이터
   const scriptData = [
-    {
-      time: '0:00',
-      text: '안녕하세요. 오늘 AI 기반 발표 연습 서비스에 대해 소개하겠습니다.'
-    },
-    {
-      time: '0:30',
-      text: '현재 많은 학생들과 직장인들이 발표에 대한 두려움을 가지고 있습니다. 우리 서비스는 이러한 문제를 해결하고자 합니다.'
-    },
-    {
-      time: '1:45',
-      text: '문제 정부터 시작하겠습니다. 효과적인 발표를 위해서는 시선 처리, 음성 톤, 자세 등 다양한 요소가 필요합니다.'
-    },
-    {
-      time: '4:10',
-      text: '우리의 해결방안은 AI를 활용한 실시간 분석입니다. 사용자의 발표 영상을 업로드하면 자동으로 분석이 진행됩니다.'
-    },
-    {
-      time: '6:45',
-      text: '기대효과는 다음과 같습니다. 첫째, 객관적인 피드백을 통해 발표 능력을 향상시킬 수 있습니다.'
-    },
-    {
-      time: '8:00',
-      text: '둘째, 반복 연습을 통해 자신감을 키울 수 있습니다. 이상으로 발표를 마치겠습니다. 감사합니다.'
-    }
+    { time: '0:00', text: '안녕하세요. 오늘 AI 기반 발표 연습 서비스에 대해 소개하겠습니다.' },
+    { time: '0:30', text: '현재 많은 학생들과 직장인들이 발표에 대한 두려움을 가지고 있습니다. 우리 서비스는 이러한 문제를 해결하고자 합니다.' },
+    { time: '1:45', text: '문제 정부터 시작하겠습니다. 효과적인 발표를 위해서는 시선 처리, 음성 톤, 자세 등 다양한 요소가 필요합니다.' },
+    { time: '4:10', text: '우리의 해결방안은 AI를 활용한 실시간 분석입니다. 사용자의 발표 영상을 업로드하면 자동으로 분석이 진행됩니다.' },
+    { time: '6:45', text: '기대효과는 다음과 같습니다. 첫째, 객관적인 피드백을 통해 발표 능력을 향상시킬 수 있습니다.' },
+    { time: '8:00', text: '둘째, 반복 연습을 통해 자신감을 키울 수 있습니다. 이상으로 발표를 마치겠습니다. 감사합니다.' }
   ];
 
-  // 타임라인 클릭 시 비디오 시간 이동
   const handleTimelineClick = (timeString: string) => {
-    // VideoPlayer에서 제공하는 방법으로 시간 이동
-    // 이 부분은 VideoPlayer에 ref를 통해 제어할 수 있도록 추가 구현 필요
     const [minutes, seconds] = timeString.split(':').map(Number);
-    const totalSeconds = minutes * 60 + seconds;
-    setCurrentVideoTime(totalSeconds);
+    setCurrentVideoTime(minutes * 60 + seconds);
   };
 
   const handleRetry = () => {
-    // 현재 세션을 유지하면서 재발표
     setCurrentSessionId(sessionId || null);
     navigate('/presentation/new');
   };
 
-  // 탭별 콘텐츠 렌더링
-  const renderTabContent = () => {
-    // 현재 attempt의 분석 결과 가져오기 (없으면 기본값)
-    const analysisResults = currentAttempt?.analysisResults || {
-      speechRate: 360,
-      eyeContact: 78,
-      duration: '8:30',
-      confidence: 75
-    };
-
-    switch (activeTab) {
-      case 'overall':
-        return (
-          <div className="space-y-6">
-            {/* 종합 평가 */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-                <h3 className="text-sm font-semibold text-blue-900 mb-2">평균 발화 속도</h3>
-                <p className="text-2xl font-bold text-blue-900">{analysisResults.speechRate} <span className="text-sm font-normal">글자/분</span></p>
-              </div>
-              <div className="bg-green-50 rounded-lg p-4 border border-green-100">
-                <h3 className="text-sm font-semibold text-green-900 mb-2">정면 응시 비율</h3>
-                <p className="text-2xl font-bold text-green-900">{analysisResults.eyeContact}%</p>
-              </div>
-            </div>
-
-            {/* 종합 평가 텍스트 */}
-            <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-2">종합 평가</h3>
-              <p className="text-sm text-slate-700 leading-relaxed">
-                전반적으로 안정적인 발표였습니다. 명확한 논리 구조와 효과적인 제스처 활용이 돋보였으며, 
-                청중과의 아이컨택도 양호한 편입니다. 다만 말하는 속도가 다소 빠르고, 중반부에 시선 처리가 
-                산만해지는 경향이 있었습니다.
-              </p>
-            </div>
-
-            {/* 자기평가 vs AI 평가 */}
-            <div>
-              <h3 className="font-semibold text-slate-900 mb-3">자기평가</h3>
-              <ComparisonChart data={comparisonData} />
-            </div>
-          </div>
-        );
-
-      case 'voice':
-        return (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
-                <Mic className="w-6 h-6 text-purple-700" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">음성 분석</h3>
-              </div>
-            </div>
-
-            {/* 5가지 평가 항목 */}
-            <div className="space-y-3">
-              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                <div className="flex items-center justify-between mb-1">
-                  <h4 className="text-sm font-semibold text-slate-900">발음 명확도</h4>
-                </div>
-                <p className="text-xs text-slate-600">발음이 명확하고 정확합니다</p>
-              </div>
-              
-              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                <div className="flex items-center justify-between mb-1">
-                  <h4 className="text-sm font-semibold text-slate-900">음량 적절성</h4>
-                </div>
-                <p className="text-xs text-slate-600">적절한 음량을 유지했습니다</p>
-              </div>
-              
-              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                <div className="flex items-center justify-between mb-1">
-                  <h4 className="text-sm font-semibold text-slate-900">말하기 속도</h4>
-                </div>
-                <p className="text-xs text-slate-600">분당 360자로 다소 빠른 편입니다</p>
-              </div>
-              
-              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                <div className="flex items-center justify-between mb-1">
-                  <h4 className="text-sm font-semibold text-slate-900">톤 변화</h4>
-                </div>
-                <p className="text-xs text-slate-600">적절한 톤 변화로 생동감 있는 발표</p>
-              </div>
-              
-              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                <div className="flex items-center justify-between mb-1">
-                  <h4 className="text-sm font-semibold text-slate-900">강약 조절</h4>
-                </div>
-                <p className="text-xs text-slate-600">중요한 부분에서 강조를 잘 활용했습니다</p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <h4 className="font-semibold text-slate-900">개선 제안</h4>
-              {[
-                '중요한 내용은 천천히 강조하며 말하세요',
-                '문장 사이에 자연스러운 쉼을 두세요',
-                '발화 속도를 분당 300자 수준으로 조절하세요'
-              ].map((suggestion, idx) => (
-                <div key={idx} className="flex items-start gap-2 bg-purple-50 rounded-lg p-3 border border-purple-100">
-                  <div className="w-1.5 h-1.5 rounded-full bg-purple-600 mt-2 flex-shrink-0" />
-                  <p className="text-sm text-purple-900">{suggestion}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-
-      case 'posture':
-        return (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                <User className="w-6 h-6 text-green-700" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">자세 및 응시</h3>
-              </div>
-            </div>
-
-            {/* 5가지 평가 항목 */}
-            <div className="space-y-3">
-              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                <div className="flex items-center justify-between mb-1">
-                  <h4 className="text-sm font-semibold text-slate-900">자세 안정성</h4>
-                </div>
-                <p className="text-xs text-slate-600">안정적인 자세를 유지했습니다</p>
-              </div>
-              
-              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                <div className="flex items-center justify-between mb-1">
-                  <h4 className="text-sm font-semibold text-slate-900">제스처 활용</h4>
-                </div>
-                <p className="text-xs text-slate-600">효과적인 제스처와 손동작 활용</p>
-              </div>
-              
-              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                <div className="flex items-center justify-between mb-1">
-                  <h4 className="text-sm font-semibold text-slate-900">정면 응시 비율</h4>
-                </div>
-                <p className="text-xs text-slate-600">78% 정면 응시</p>
-              </div>
-              
-              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                <div className="flex items-center justify-between mb-1">
-                  <h4 className="text-sm font-semibold text-slate-900">시선 분산</h4>
-                </div>
-                <p className="text-xs text-slate-600">청중의 여러 방향을 적절히 응시</p>
-              </div>
-              
-              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                <div className="flex items-center justify-between mb-1">
-                  <h4 className="text-sm font-semibold text-slate-900">자신감 표현</h4>
-                </div>
-                <p className="text-xs text-slate-600">자신감 있는 몸동작이 관찰됨</p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <h4 className="font-semibold text-slate-900">개선 제안</h4>
-              {[
-                '현재 수준을 유지하세요',
-                '가끔 무대를 이동하며 역동성을 더할 수 있습니다',
-                '제스처의 크기를 청중 규모에 맞게 조절하세요'
-              ].map((suggestion, idx) => (
-                <div key={idx} className="flex items-start gap-2 bg-green-50 rounded-lg p-3 border border-green-100">
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-600 mt-2 flex-shrink-0" />
-                  <p className="text-sm text-green-900">{suggestion}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-    }
+  const scrollToSection = (section: 'overall' | 'voice' | 'posture') => {
+    const refMap = { overall: overallRef, voice: voiceRef, posture: postureRef };
+    refMap[section].current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   return (
     <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
-      {/* 새 레이아웃: 왼쪽(영상+타임라인) / 오른쪽(피드백 전체 높이) */}
       <div className="flex-1 flex gap-4 p-4 overflow-hidden">
 
-        {/* 왼쪽 컬럼: 영상(상단) + 타임라인(하단) */}
+        {/* 왼쪽 컬럼: 영상 + 타임라인 */}
         <div className="flex flex-col gap-4 w-1/2 min-w-0">
-
-          {/* 왼쪽 상단: 영상 플레이어 */}
           <div className="bg-black rounded-xl shadow-lg relative" style={{ height: '52vh' }}>
             {currentAttempt.videoUrl ? (
               <VideoPlayer
@@ -332,12 +127,9 @@ export default function ResultsPage() {
             )}
           </div>
 
-          {/* 왼쪽 하단: 타임라인 */}
           <div className="bg-white rounded-xl shadow-lg overflow-hidden flex flex-col flex-1 min-h-0">
             <div className="px-4 py-2.5 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center gap-4">
-                <h2 className="text-base font-bold text-slate-900">타임라인</h2>
-              </div>
+              <h2 className="text-base font-bold text-slate-900">타임라인</h2>
               {currentSession.attempts.length >= 2 ? (
                 <button
                   onClick={() => navigate(`/presentation/compare/${sessionId}`)}
@@ -366,12 +158,12 @@ export default function ResultsPage() {
           </div>
         </div>
 
-        {/* 오른쪽 컬럼: 피드백 패널 (전체 높이) */}
+        {/* 오른쪽 컬럼: 피드백 패널 */}
         <div className="w-1/2 bg-white rounded-xl shadow-lg overflow-hidden flex flex-col min-h-0">
-          {/* 탭 네비게이션 */}
+          {/* 고정 탭 네비게이션 */}
           <div className="flex border-b border-slate-200 bg-white flex-shrink-0">
             <button
-              onClick={() => setActiveTab('overall')}
+              onClick={() => scrollToSection('overall')}
               className={`flex-1 px-4 py-3 font-semibold text-sm transition-colors ${
                 activeTab === 'overall'
                   ? 'text-blue-900 border-b-2 border-blue-900 bg-blue-50'
@@ -381,7 +173,7 @@ export default function ResultsPage() {
               종합
             </button>
             <button
-              onClick={() => setActiveTab('voice')}
+              onClick={() => scrollToSection('voice')}
               className={`flex-1 px-4 py-3 font-semibold text-sm transition-colors flex items-center justify-center gap-2 ${
                 activeTab === 'voice'
                   ? 'text-blue-900 border-b-2 border-blue-900 bg-blue-50'
@@ -392,7 +184,7 @@ export default function ResultsPage() {
               음성
             </button>
             <button
-              onClick={() => setActiveTab('posture')}
+              onClick={() => scrollToSection('posture')}
               className={`flex-1 px-4 py-3 font-semibold text-sm transition-colors flex items-center justify-center gap-2 ${
                 activeTab === 'posture'
                   ? 'text-blue-900 border-b-2 border-blue-900 bg-blue-50'
@@ -404,35 +196,130 @@ export default function ResultsPage() {
             </button>
           </div>
 
-          {/* 콘텐츠 영역 (스크롤 가능) */}
-          <div className="flex-1 overflow-y-auto scrollbar-hide">
-            {/* 탭 콘텐츠 */}
-            <div className="p-6">
-              {renderTabContent()}
-            </div>
+          {/* 단일 스크롤 콘텐츠 영역 */}
+          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scrollbar-hide">
 
-            {/* 스크립트 - 종합 탭에서만 표시 */}
-            {activeTab === 'overall' && (
-              <div className="p-6 pt-0">
-                <div className="border-t border-slate-200 pt-6">
-                  <h3 className="text-lg font-bold text-slate-900 mb-4">발표 스크립트</h3>
-                  <div className="space-y-4">
-                    {scriptData.map((item, index) => (
-                      <div key={index} className="flex gap-4">
-                        <div className="flex-shrink-0 w-16">
-                          <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm font-mono font-semibold">
-                            {item.time}
-                          </span>
-                        </div>
-                        <p className="flex-1 text-slate-700 leading-relaxed">
-                          {item.text}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
+            {/* 종합 섹션 */}
+            <div ref={overallRef} data-section="overall" className="p-6 space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                  <h3 className="text-sm font-semibold text-blue-900 mb-2">평균 발화 속도</h3>
+                  <p className="text-2xl font-bold text-blue-900">{analysisResults.speechRate} <span className="text-sm font-normal">글자/분</span></p>
+                </div>
+                <div className="bg-green-50 rounded-lg p-4 border border-green-100">
+                  <h3 className="text-sm font-semibold text-green-900 mb-2">정면 응시 비율</h3>
+                  <p className="text-2xl font-bold text-green-900">{analysisResults.eyeContact}%</p>
                 </div>
               </div>
-            )}
+
+              <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <h3 className="font-semibold text-slate-900 mb-2">종합 평가</h3>
+                <p className="text-sm text-slate-700 leading-relaxed">
+                  전반적으로 안정적인 발표였습니다. 명확한 논리 구조와 효과적인 제스처 활용이 돋보였으며,
+                  청중과의 아이컨택도 양호한 편입니다. 다만 말하는 속도가 다소 빠르고, 중반부에 시선 처리가
+                  산만해지는 경향이 있었습니다.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">발표 스크립트</h3>
+                <div className="space-y-4">
+                  {scriptData.map((item, index) => (
+                    <div key={index} className="flex gap-4">
+                      <div className="flex-shrink-0 w-16">
+                        <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm font-mono font-semibold">
+                          {item.time}
+                        </span>
+                      </div>
+                      <p className="flex-1 text-slate-700 leading-relaxed">{item.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200 mx-6" />
+
+            {/* 음성 섹션 */}
+            <div ref={voiceRef} data-section="voice" className="p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
+                  <Mic className="w-6 h-6 text-purple-700" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900">음성 분석</h3>
+              </div>
+
+              <div className="space-y-3">
+                {[
+                  { label: '발음 명확도', desc: '발음이 명확하고 정확합니다' },
+                  { label: '음량 적절성', desc: '적절한 음량을 유지했습니다' },
+                  { label: '말하기 속도', desc: '분당 360자로 다소 빠른 편입니다' },
+                  { label: '톤 변화', desc: '적절한 톤 변화로 생동감 있는 발표' },
+                  { label: '강약 조절', desc: '중요한 부분에서 강조를 잘 활용했습니다' },
+                ].map((item, idx) => (
+                  <div key={idx} className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                    <h4 className="text-sm font-semibold text-slate-900 mb-1">{item.label}</h4>
+                    <p className="text-xs text-slate-600">{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-semibold text-slate-900">개선 제안</h4>
+                {[
+                  '중요한 내용은 천천히 강조하며 말하세요',
+                  '문장 사이에 자연스러운 쉼을 두세요',
+                  '발화 속도를 분당 300자 수준으로 조절하세요',
+                ].map((suggestion, idx) => (
+                  <div key={idx} className="flex items-start gap-2 bg-purple-50 rounded-lg p-3 border border-purple-100">
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-600 mt-2 flex-shrink-0" />
+                    <p className="text-sm text-purple-900">{suggestion}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200 mx-6" />
+
+            {/* 자세 섹션 */}
+            <div ref={postureRef} data-section="posture" className="p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                  <User className="w-6 h-6 text-green-700" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900">자세 및 응시</h3>
+              </div>
+
+              <div className="space-y-3">
+                {[
+                  { label: '자세 안정성', desc: '안정적인 자세를 유지했습니다' },
+                  { label: '제스처 활용', desc: '효과적인 제스처와 손동작 활용' },
+                  { label: '정면 응시 비율', desc: '78% 정면 응시' },
+                  { label: '시선 분산', desc: '청중의 여러 방향을 적절히 응시' },
+                  { label: '자신감 표현', desc: '자신감 있는 몸동작이 관찰됨' },
+                ].map((item, idx) => (
+                  <div key={idx} className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                    <h4 className="text-sm font-semibold text-slate-900 mb-1">{item.label}</h4>
+                    <p className="text-xs text-slate-600">{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-semibold text-slate-900">개선 제안</h4>
+                {[
+                  '현재 수준을 유지하세요',
+                  '가끔 무대를 이동하며 역동성을 더할 수 있습니다',
+                  '제스처의 크기를 청중 규모에 맞게 조절하세요',
+                ].map((suggestion, idx) => (
+                  <div key={idx} className="flex items-start gap-2 bg-green-50 rounded-lg p-3 border border-green-100">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-600 mt-2 flex-shrink-0" />
+                    <p className="text-sm text-green-900">{suggestion}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
           </div>
         </div>
 
