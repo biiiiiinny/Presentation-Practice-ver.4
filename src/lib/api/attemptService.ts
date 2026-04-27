@@ -18,7 +18,6 @@ const MOCK_ATTEMPTS: Attempt[] = [
     sessionId: 1,
     videoUrl: 'https://example.com/video1.mp4',
     overallScore: 86,
-    selfEvaluation: JSON.stringify({ accuracy: 20, logic: 30, creativity: 40, cooperation: 10 }),
     aiAnalysis: JSON.stringify({ gaze: {}, voice: {}, posture: {}, content: {} }),
     createdAt: '2024-01-28T00:00:00Z',
   },
@@ -40,8 +39,7 @@ export const AttemptService = {
         id: Date.now(),
         sessionId: data.sessionId,
         videoUrl: data.videoFile ? URL.createObjectURL(data.videoFile) : undefined,
-        overallScore: 86, // Mock 점수
-        selfEvaluation: JSON.stringify(data.selfEvaluation),
+        overallScore: 86,
         aiAnalysis: JSON.stringify({
           gaze: { score: 85, feedback: 'Mock 시선 피드백' },
           voice: { score: 87, feedback: 'Mock 음성 피드백' },
@@ -65,7 +63,6 @@ export const AttemptService = {
     // FormData로 변환 (영상 파일 포함)
     const formData = new FormData();
     formData.append('sessionId', data.sessionId.toString());
-    formData.append('selfEvaluation', JSON.stringify(data.selfEvaluation));
     if (data.videoFile) {
       formData.append('videoFile', data.videoFile);
     }

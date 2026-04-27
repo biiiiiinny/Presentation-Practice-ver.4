@@ -65,7 +65,6 @@ export interface Attempt {
   sessionId: number;             // BIGINT (FK -> presentation_session.id)
   videoUrl?: string;             // VARCHAR(500) - 영상 URL (S3 등)
   overallScore: number;          // INT - 전체 점수
-  selfEvaluation?: string;       // JSON - 자기평가 점수
   aiAnalysis?: string;           // JSON - AI 분석 결과
   createdAt: string;             // DATETIME
 }
@@ -104,8 +103,7 @@ export interface CreateSessionResponse {
 
 export interface CreateAttemptRequest {
   sessionId: number;
-  videoFile?: File;              // 멀티파트 업로드 시 사용
-  selfEvaluation: Record<string, number>;
+  videoFile?: File;
 }
 
 export interface CreateAttemptResponse {
