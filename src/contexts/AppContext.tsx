@@ -4,14 +4,17 @@ export interface Attempt {
   id: string;
   date: string;
   score: number;
-  selfEvaluation?: Record<string, number>;
   videoFile?: File | null;
   videoUrl?: string;
   analysisResults?: {
-    speechRate: number; // 발화 속도 (글자/분)
-    eyeContact: number; // 정면 응시 비율 (%)
-    duration: string; // 발표 시간 (M:SS)
-    confidence: number; // 자신감 지수 (점수)
+    speechRate: number;
+    eyeContact: number;
+    duration: string;
+    confidence: number;
+    fillerWordCount?: number;
+    silenceRatio?: number;
+    pitchScore?: number;
+    habitualBehaviorCount?: number;
   };
 }
 
@@ -23,7 +26,6 @@ export interface Session {
   isFavorite?: boolean;
   formData?: any;
   attempts: Attempt[];
-  selfEvaluation?: Record<string, number>;
   videoUrl?: string;
 }
 
@@ -49,16 +51,12 @@ interface AppContextType {
   setCurrentSessionId: (id: string | null) => void;
   currentFormData: any;
   setCurrentFormData: (data: any) => void;
-  selfEvaluation: Record<string, number>;
-  setSelfEvaluation: (evaluation: Record<string, number>) => void;
   isAnalyzing: boolean;
   setIsAnalyzing: (value: boolean) => void;
   analysisProgress: number;
   setAnalysisProgress: (value: number) => void;
   currentPresentationTopic: string;
   setCurrentPresentationTopic: (topic: string) => void;
-  selfEvaluationCompleted: boolean;
-  setSelfEvaluationCompleted: (value: boolean) => void;
   analysisCompleted: boolean;
   setAnalysisCompleted: (value: boolean) => void;
   isSidebarCollapsed: boolean;
@@ -68,13 +66,9 @@ interface AppContextType {
   handleDeleteAttempt: (sessionId: string, attemptId: string) => void;
   handleToggleFavorite: (id: string) => void;
   handleNewPresentation: () => void;
-  addOrUpdateSession: (evaluation: Record<string, number>) => string;
   createSession: (formData: any) => string;
-  // 새 분석 흐름
   startAnalysis: (topic: string) => void;
-  completeSelfEvaluation: (evaluation: Record<string, number>) => void;
   completeAnalysis: () => void;
-  // 알림 관련
   notifications: Notification[];
   addNotification: (sessionId: string, title: string) => void;
   markNotificationAsRead: (id: string) => void;
@@ -87,28 +81,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [selfEvaluation, setSelfEvaluation] = useState<Record<string, number>>({});
   const [currentFormData, setCurrentFormData] = useState<any>(null);
   const [savedLoginEmail, setSavedLoginEmail] = useState('');
   const [savedLoginPassword, setSavedLoginPassword] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [currentPresentationTopic, setCurrentPresentationTopic] = useState('');
-  const [selfEvaluationCompleted, setSelfEvaluationCompleted] = useState(false);
   const [analysisCompleted, setAnalysisCompleted] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  // ─── 업적 알림 추적 ──────────────────────────────────────────────────────
   const notifiedAchievementsRef = useRef<Set<string>>(new Set());
   const isFirstAchievementCheck = useRef(true);
 
-  // ─── Refs: 페이지 이동 후에도 유지 ───────────────────────────────────────
   const analysisIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // 자기평가가 먼저 완료됐을 때 임시 저장 (분석 완료 시 세션 생성에 사용)
-  const pendingSelfEvaluationRef = useRef<Record<string, number> | null>(null);
-  // 분석이 먼저 완료됐을 때 플래그
-  const pendingAnalysisRef = useRef(false);
-  // createSessionFromRefs 내에서 최신 상태값 참조
   const currentFormDataRef = useRef<any>(null);
   const currentSessionIdRef = useRef<string | null>(null);
 
@@ -131,11 +116,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         feedbackTone: 'default'
       },
       attempts: [
-        { 
-          id: '1-1', 
-          date: '2024-01-28', 
-          score: 86, 
-          selfEvaluation: { eyeContact: 4, voice: 4, posture: 5, content: 4 }
+        {
+          id: '1-1',
+          date: '2024-01-28',
+          score: 86,
+          analysisResults: {
+            speechRate: 350, eyeContact: 82, duration: '9:15', confidence: 80,
+            fillerWordCount: 5, silenceRatio: 10, pitchScore: 72, habitualBehaviorCount: 3
+          }
         }
       ]
     },
@@ -158,24 +146,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
           id: '2-1',
           date: '2024-01-27',
           score: 52,
-          selfEvaluation: { eyeContact: 2, voice: 2, posture: 2, content: 3 },
           analysisResults: {
-            speechRate: 480,   // 빠름 (기준 초과 +80)
-            eyeContact: 45,    // 낮음 (기준 70% 미달)
-            duration: '6:20',  // 짧음 (목표 15분 대비 미달)
-            confidence: 48     // 낮음 (기준 70점 미달)
+            speechRate: 480, eyeContact: 45, duration: '6:20', confidence: 48,
+            fillerWordCount: 18, silenceRatio: 3, pitchScore: 32, habitualBehaviorCount: 11
           }
         },
         {
           id: '2-2',
           date: '2024-01-28',
           score: 91,
-          selfEvaluation: { eyeContact: 5, voice: 5, posture: 4, content: 5 },
           analysisResults: {
-            speechRate: 340,   // 적정 (기준 범위 내)
-            eyeContact: 88,    // 높음 (기준 초과)
-            duration: '14:30', // 적정 (목표 15분 근접)
-            confidence: 85     // 높음 (기준 초과)
+            speechRate: 340, eyeContact: 88, duration: '14:30', confidence: 85,
+            fillerWordCount: 3, silenceRatio: 12, pitchScore: 78, habitualBehaviorCount: 2
           }
         }
       ]
@@ -195,11 +177,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         feedbackTone: 'honest'
       },
       attempts: [
-        { 
-          id: '3-1', 
-          date: '2024-01-25', 
-          score: 88, 
-          selfEvaluation: { eyeContact: 5, voice: 4, posture: 5, content: 4 }
+        {
+          id: '3-1',
+          date: '2024-01-25',
+          score: 88,
+          analysisResults: {
+            speechRate: 320, eyeContact: 85, duration: '11:30', confidence: 82,
+            fillerWordCount: 4, silenceRatio: 12, pitchScore: 76, habitualBehaviorCount: 2
+          }
         }
       ]
     },
@@ -218,11 +203,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         feedbackTone: 'default'
       },
       attempts: [
-        { 
-          id: '4-1', 
-          date: '2024-01-20', 
-          score: 79, 
-          selfEvaluation: { eyeContact: 3, voice: 3, posture: 4, content: 4 }
+        {
+          id: '4-1',
+          date: '2024-01-20',
+          score: 79,
+          analysisResults: {
+            speechRate: 420, eyeContact: 70, duration: '7:45', confidence: 68,
+            fillerWordCount: 9, silenceRatio: 6, pitchScore: 58, habitualBehaviorCount: 5
+          }
         }
       ]
     }
@@ -234,13 +222,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const totalRetries = sessions.reduce((sum, s) => sum + (s.attempts.length - 1), 0);
 
     const achievements = [
-      { title: '첫 발표 완료',     achieved: totalPresentations >= 1 },
-      { title: '첫 재발표 완료',   achieved: totalRetries >= 1 },
+      { title: '첫 발표 완료',    achieved: totalPresentations >= 1 },
+      { title: '첫 재발표 완료',  achieved: totalRetries >= 1 },
       { title: '5번째 발표 달성', achieved: totalPresentations >= 5 },
     ];
 
     if (isFirstAchievementCheck.current) {
-      // 앱 최초 로드 시: 이미 달성된 업적은 알림 없이 시드만 등록
       isFirstAchievementCheck.current = false;
       achievements.forEach(({ title, achieved }) => {
         if (achieved) notifiedAchievementsRef.current.add(title);
@@ -248,7 +235,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // 이후 sessions 변경 시: 새로 달성된 업적에만 알림 추가
     achievements.forEach(({ title, achieved }) => {
       if (achieved && !notifiedAchievementsRef.current.has(title)) {
         notifiedAchievementsRef.current.add(title);
@@ -265,7 +251,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [sessions]);
 
   // ─── 세션 생성 (ref 기반으로 최신 formData / sessionId 사용) ─────────────
-  const createSessionFromRefs = (evaluation: Record<string, number>): number => {
+  const createSessionFromRefs = (): number => {
     const formData = currentFormDataRef.current;
     const sessionId = currentSessionIdRef.current;
     const videoUrl = formData?.videoFile
@@ -275,45 +261,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let attemptNumber = 1;
 
     if (sessionId) {
-      // 기존 세션에 attempt 추가 (첫 발표 또는 재발표)
       setSessions(prev => prev.map(s => {
         if (s.id === sessionId) {
           attemptNumber = s.attempts.length + 1;
-          
-          // sessionId를 기반으로 일관성 있는 분석 결과 생성
+
           const hash = sessionId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
           const seed = hash + attemptNumber;
-          
-          // 1회차 기본값
+
           const baseSpeechRate = 350 + (seed % 30);
           const baseEyeContact = 75 + (seed % 10);
           const baseDurationMin = 8 + (seed % 2);
           const baseDurationSec = (seed % 4) * 15;
           const baseConfidence = 72 + (seed % 15);
-          
-          // 2회차 이상이면 개선된 값
+          const baseFillerCount = 6 + (seed % 5);
+          const baseSilenceRatio = 8 + (seed % 6);
+          const basePitchScore = 55 + (seed % 20);
+          const baseHabitualCount = 5 + (seed % 4);
+
           let speechRate, eyeContact, durationMin, durationSec, confidence;
-          
+          let fillerWordCount, silenceRatio, pitchScore, habitualBehaviorCount;
+
           if (attemptNumber === 1) {
             speechRate = baseSpeechRate;
             eyeContact = baseEyeContact;
             durationMin = baseDurationMin;
             durationSec = baseDurationSec;
             confidence = baseConfidence;
+            fillerWordCount = baseFillerCount;
+            silenceRatio = baseSilenceRatio;
+            pitchScore = basePitchScore;
+            habitualBehaviorCount = baseHabitualCount;
           } else {
-            speechRate = baseSpeechRate - 30 - (seed % 20); // 발화 속도 감소 (개선)
-            eyeContact = baseEyeContact + 5 + (seed % 10); // 정면 응시 증가
+            speechRate = baseSpeechRate - 30 - (seed % 20);
+            eyeContact = Math.min(95, baseEyeContact + 5 + (seed % 10));
             const totalSec = (baseDurationMin * 60 + baseDurationSec) + 30 + (seed % 30);
             durationMin = Math.floor(totalSec / 60);
             durationSec = totalSec % 60;
-            confidence = baseConfidence + 10 + (seed % 8); // 자신감 증가
+            confidence = Math.min(95, baseConfidence + 10 + (seed % 8));
+            fillerWordCount = Math.max(1, baseFillerCount - 3);
+            silenceRatio = Math.min(15, baseSilenceRatio + 2);
+            pitchScore = Math.min(95, basePitchScore + 15);
+            habitualBehaviorCount = Math.max(0, baseHabitualCount - 3);
           }
-          
+
           return {
             ...s,
             date: new Date().toISOString(),
             score: 86,
-            selfEvaluation: evaluation,
             videoUrl: videoUrl || s.videoUrl,
             attempts: [
               ...s.attempts,
@@ -321,13 +315,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 id: `${sessionId}-${attemptNumber}`,
                 date: new Date().toISOString(),
                 score: 86,
-                selfEvaluation: evaluation,
                 videoUrl: videoUrl,
                 analysisResults: {
-                  speechRate: speechRate,
-                  eyeContact: eyeContact,
+                  speechRate, eyeContact,
                   duration: `${durationMin}:${durationSec.toString().padStart(2, '0')}`,
-                  confidence: confidence
+                  confidence, fillerWordCount, silenceRatio, pitchScore, habitualBehaviorCount
                 }
               }
             ]
@@ -335,43 +327,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         return s;
       }));
-      // 알림 생성
       addNotification(sessionId, formData?.topic || '발표');
     }
-    setSelfEvaluation(evaluation);
     return attemptNumber;
   };
 
-  // ─── 분석 완료 후 상태 정리 (2초 뒤 progressbar 숨김) ─────────────────────
+  // ─── 분석 완료 후 UI 정리 ─────────────────────────────────────────────────
   const finishAnalysisUI = () => {
     setAnalysisCompleted(true);
     setTimeout(() => {
       setIsAnalyzing(false);
       setAnalysisProgress(0);
       setCurrentPresentationTopic('');
-      setSelfEvaluationCompleted(false);
       setAnalysisCompleted(false);
     }, 2000);
   };
 
-  // ─── startAnalysis: AppContext에서 타이머 관리 (페이지 이동 무관) ──────────
+  // ─── startAnalysis ────────────────────────────────────────────────────────
   const startAnalysis = (topic: string) => {
-    // 기존 타이머 정리
     if (analysisIntervalRef.current) {
       clearInterval(analysisIntervalRef.current);
       analysisIntervalRef.current = null;
     }
 
-    // 상태 초기화
-    pendingSelfEvaluationRef.current = null;
-    pendingAnalysisRef.current = false;
     setCurrentPresentationTopic(topic);
     setIsAnalyzing(true);
     setAnalysisProgress(0);
-    setSelfEvaluationCompleted(false);
     setAnalysisCompleted(false);
 
-    // 로컬 카운터로 진행률 추적 (setState updater 안에 side-effect 넣지 않음)
     let progress = 0;
     analysisIntervalRef.current = setInterval(() => {
       progress += 1;
@@ -380,103 +363,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (progress >= 100) {
         clearInterval(analysisIntervalRef.current!);
         analysisIntervalRef.current = null;
-
-        if (pendingSelfEvaluationRef.current) {
-          // 케이스 1: 자기평가가 이미 완료 → 즉시 세션 생성 후 UI 정리
-          createSessionFromRefs(pendingSelfEvaluationRef.current);
-          pendingSelfEvaluationRef.current = null;
-          finishAnalysisUI();
-        } else {
-          // 케이스 2: 자기평가 아직 진행 중 → 대기 플래그 세우기
-          pendingAnalysisRef.current = true;
-        }
+        createSessionFromRefs();
+        finishAnalysisUI();
       }
-    }, 80); // 약 8초 (100 steps × 80ms)
-  };
-
-  // ─── completeSelfEvaluation: 자기평가 완료 처리 ──────────────────────────
-  const completeSelfEvaluation = (evaluation: Record<string, number>) => {
-    setSelfEvaluation(evaluation);
-    setSelfEvaluationCompleted(true);
-
-    if (pendingAnalysisRef.current) {
-      // 케이스 2 완성: 분석이 이미 완료돼 있었음 → 즉시 세션 생성 + UI 정리
-      pendingAnalysisRef.current = false;
-      createSessionFromRefs(evaluation);
-      setIsAnalyzing(false);
-      setAnalysisProgress(0);
-      setCurrentPresentationTopic('');
-      setSelfEvaluationCompleted(false);
-      setAnalysisCompleted(false);
-    } else {
-      // 케이스 1 대기 중: 분석 아직 진행 중 → 임시 저장
-      // 분석 완료 시 startAnalysis 인터벌에서 세션 생성
-      pendingSelfEvaluationRef.current = evaluation;
-    }
-    // 어느 케이스든 navigate('/dashboard')는 SelfEvaluationPage에서 호출
+    }, 80);
   };
 
   const completeAnalysis = () => {
     setAnalysisCompleted(true);
-  };
-
-  // ─── 기존 addOrUpdateSession (레거시 / 하위호환) ─────────────────────────
-  const addOrUpdateSession = (evaluation: Record<string, number>) => {
-    let targetSessionId: string;
-    const videoUrl = currentFormData?.videoFile
-      ? URL.createObjectURL(currentFormData.videoFile)
-      : undefined;
-
-    if (currentSessionId) {
-      setSessions(prev => prev.map(s =>
-        s.id === currentSessionId
-          ? {
-              ...s,
-              date: new Date().toISOString(),
-              score: 86,
-              selfEvaluation: evaluation,
-              videoUrl: videoUrl || s.videoUrl,
-              attempts: [
-                ...s.attempts,
-                {
-                  id: `${currentSessionId}-${s.attempts.length + 1}`,
-                  date: new Date().toISOString(),
-                  score: 86,
-                  selfEvaluation: evaluation,
-                  videoUrl: videoUrl
-                }
-              ]
-            }
-          : s
-      ));
-      targetSessionId = currentSessionId;
-    } else {
-      const newSessionId = Date.now().toString();
-      const newSession: Session = {
-        id: newSessionId,
-        title: currentFormData?.topic || '새로운 발표',
-        date: new Date().toISOString(),
-        score: 86,
-        isFavorite: false,
-        formData: currentFormData,
-        selfEvaluation: evaluation,
-        videoUrl,
-        attempts: [
-          {
-            id: `${newSessionId}-1`,
-            date: new Date().toISOString(),
-            score: 86,
-            selfEvaluation: evaluation,
-            videoUrl: videoUrl
-          }
-        ]
-      };
-      setSessions(prev => [newSession, ...prev]);
-      setCurrentSessionId(newSessionId);
-      targetSessionId = newSessionId;
-    }
-    setSelfEvaluation(evaluation);
-    return targetSessionId;
   };
 
   const handleSelectSession = (id: string) => {
@@ -484,7 +378,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (session) {
       setCurrentSessionId(id);
       setCurrentFormData(session.formData);
-      setSelfEvaluation(session.selfEvaluation || {});
     }
   };
 
@@ -496,10 +389,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const handleDeleteAttempt = (sessionId: string, attemptId: string) => {
     setSessions(prev => prev.map(s =>
       s.id === sessionId
-        ? {
-            ...s,
-            attempts: s.attempts.filter(a => a.id !== attemptId)
-          }
+        ? { ...s, attempts: s.attempts.filter(a => a.id !== attemptId) }
         : s
     ));
   };
@@ -513,20 +403,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const handleNewPresentation = () => {
     setCurrentSessionId(null);
     setCurrentFormData(null);
-    setSelfEvaluation({});
   };
 
-  // ─── 알림 관련 함수 ───────────────────────────────────────────────────
   const addNotification = (sessionId: string, title: string) => {
-    const newNotification: Notification = {
+    setNotifications(prev => [{
       id: Date.now().toString(),
       sessionId,
       title,
       message: '발표 분석이 완료되었습니다.',
       date: new Date().toISOString(),
       isRead: false
-    };
-    setNotifications(prev => [newNotification, ...prev]);
+    }, ...prev]);
   };
 
   const markNotificationAsRead = (id: string) => {
@@ -539,29 +426,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotifications([]);
   };
 
-  // ─── createSession: 발표 설정 완료 시 세션 먼저 생성 (자기평가 전) ─────────
+  // ─── createSession: 발표 설정 완료 시 세션 먼저 생성 ─────────────────────
   const createSession = (formData: any): string => {
-    // 재발표인 경우: 기존 세션 ID 유지, formData만 업데이트
     if (currentSessionId) {
       setSessions(prev => prev.map(s =>
-        s.id === currentSessionId
-          ? { ...s, formData }
-          : s
+        s.id === currentSessionId ? { ...s, formData } : s
       ));
       return currentSessionId;
     }
-    
-    // 새 발표인 경우: 새 세션 생성
+
     const newId = Date.now().toString();
     const newSession: Session = {
       id: newId,
       title: formData?.topic || '새로운 발표',
       date: new Date().toISOString(),
-      score: 0, // 아직 분석 전
+      score: 0,
       isFavorite: false,
       formData,
-      selfEvaluation: {},
-      attempts: [] // 빈 배열로 시작! 분석 완료 시 첫 attempt 추가됨
+      attempts: []
     };
     setSessions(prev => [newSession, ...prev]);
     setCurrentSessionId(newId);
@@ -584,8 +466,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCurrentSessionId,
     currentFormData,
     setCurrentFormData,
-    selfEvaluation,
-    setSelfEvaluation,
     isSidebarCollapsed,
     setIsSidebarCollapsed,
     handleSelectSession,
@@ -593,19 +473,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     handleDeleteAttempt,
     handleToggleFavorite,
     handleNewPresentation,
-    addOrUpdateSession,
     isAnalyzing,
     setIsAnalyzing,
     analysisProgress,
     setAnalysisProgress,
     currentPresentationTopic,
     setCurrentPresentationTopic,
-    selfEvaluationCompleted,
-    setSelfEvaluationCompleted,
     analysisCompleted,
     setAnalysisCompleted,
     startAnalysis,
-    completeSelfEvaluation,
     completeAnalysis,
     notifications,
     addNotification,
