@@ -1,22 +1,21 @@
 import { useRef, useState, useEffect } from 'react';
 import { Play, Pause, Volume2, VolumeX, SkipBack, SkipForward } from 'lucide-react';
+import type { IssueSegment } from '../contexts/AppContext';
 
-interface IssueSegment {
-  start: number; // 초 단위
-  end: number;
-  type: 'voice' | 'posture';
-  label: string;
-  color: string;
-}
+const SEGMENT_COLOR: Record<IssueSegment['type'], string> = {
+  voice: 'bg-red-500',
+  posture: 'bg-orange-500',
+};
 
 interface VideoPlayerProps {
   videoUrl: string;
-  currentTime?: number; // 외부에서 시간 변경 요청
+  currentTime?: number;
   onTimeUpdate?: (time: number) => void;
   className?: string;
+  issueSegments?: IssueSegment[];
 }
 
-export function VideoPlayer({ videoUrl, currentTime, onTimeUpdate, className }: VideoPlayerProps) {
+export function VideoPlayer({ videoUrl, currentTime, onTimeUpdate, className, issueSegments = [] }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -26,14 +25,6 @@ export function VideoPlayer({ videoUrl, currentTime, onTimeUpdate, className }: 
   const [buffered, setBuffered] = useState(0);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
   const [hoverIssue, setHoverIssue] = useState<IssueSegment | null>(null);
-
-  // 문제 구간 데이터 (Mock)
-  const issueSegments: IssueSegment[] = [
-    { start: 90, end: 120, type: 'voice', label: '말하기 속도 빠름 (380자/분)', color: 'bg-red-500' },
-    { start: 180, end: 200, type: 'posture', label: '선 이탈', color: 'bg-orange-500' },
-    { start: 250, end: 280, type: 'voice', label: '음량 불균형', color: 'bg-yellow-500' },
-    { start: 350, end: 380, type: 'posture', label: '자세 흔들림', color: 'bg-orange-500' },
-  ];
 
   useEffect(() => {
     const video = videoRef.current;
@@ -206,7 +197,7 @@ export function VideoPlayer({ videoUrl, currentTime, onTimeUpdate, className }: 
                 return (
                   <div
                     key={idx}
-                    className={`absolute top-0 h-full ${segment.color} opacity-80`}
+                    className={`absolute top-0 h-full ${SEGMENT_COLOR[segment.type]} opacity-80`}
                     style={{
                       left: `${Math.max(0, Math.min(100, startPercent))}%`,
                       width: `${Math.max(0, Math.min(100, widthPercent))}%`,

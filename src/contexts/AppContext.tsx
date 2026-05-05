@@ -1,5 +1,12 @@
 import { createContext, useContext, useState, useRef, useEffect, ReactNode } from 'react';
 
+export interface IssueSegment {
+  start: number;
+  end: number;
+  type: 'voice' | 'posture';
+  label: string;
+}
+
 export interface Attempt {
   id: string;
   date: string;
@@ -10,11 +17,16 @@ export interface Attempt {
     speechRate: number;
     eyeContact: number;
     duration: string;
-    confidence: number;
-    fillerWordCount?: number;
-    silenceRatio?: number;
-    pitchScore?: number;
+    postureScore: number;
+    pitchVariation?: number;
+    avgIPsPerSentence?: number;
+    avgWordsPerSentence?: number;
+    lateSpeedRatio?: number;
+    longPauseCount?: number;
+    wordPauseCount?: number;
+    fillerRate?: number;
     habitualBehaviorCount?: number;
+    issueSegments?: IssueSegment[];
   };
 }
 
@@ -121,8 +133,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           date: '2024-01-28',
           score: 86,
           analysisResults: {
-            speechRate: 350, eyeContact: 82, duration: '9:15', confidence: 80,
-            fillerWordCount: 5, silenceRatio: 10, pitchScore: 72, habitualBehaviorCount: 3
+            speechRate: 310, eyeContact: 82, duration: '9:15', postureScore: 80,
+            pitchVariation: 78, avgIPsPerSentence: 3.2, avgWordsPerSentence: 10,
+            lateSpeedRatio: 1.03, longPauseCount: 1, wordPauseCount: 9, fillerRate: 0.30, habitualBehaviorCount: 3
           }
         }
       ]
@@ -144,20 +157,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attempts: [
         {
           id: '2-1',
-          date: '2024-01-27',
+          date: '2026-05-01',
           score: 52,
           analysisResults: {
-            speechRate: 480, eyeContact: 45, duration: '6:20', confidence: 48,
-            fillerWordCount: 18, silenceRatio: 3, pitchScore: 32, habitualBehaviorCount: 11
+            speechRate: 368, eyeContact: 80, duration: '11:00', postureScore: 48,
+            pitchVariation: 36, avgIPsPerSentence: 7.2, avgWordsPerSentence: 15,
+            lateSpeedRatio: 1.22, longPauseCount: 6, wordPauseCount: 28, fillerRate: 0.74, habitualBehaviorCount: 10
           }
         },
         {
           id: '2-2',
-          date: '2024-01-28',
+          date: '2026-05-02',
           score: 91,
           analysisResults: {
-            speechRate: 340, eyeContact: 88, duration: '14:30', confidence: 85,
-            fillerWordCount: 3, silenceRatio: 12, pitchScore: 78, habitualBehaviorCount: 2
+            speechRate: 298, eyeContact: 90, duration: '9:30', postureScore: 85,
+            pitchVariation: 83, avgIPsPerSentence: 2.8, avgWordsPerSentence: 10,
+            lateSpeedRatio: 1.02, longPauseCount: 1, wordPauseCount: 8, fillerRate: 0.24, habitualBehaviorCount: 5
           }
         }
       ]
@@ -182,8 +197,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           date: '2024-01-25',
           score: 88,
           analysisResults: {
-            speechRate: 320, eyeContact: 85, duration: '11:30', confidence: 82,
-            fillerWordCount: 4, silenceRatio: 12, pitchScore: 76, habitualBehaviorCount: 2
+            speechRate: 306, eyeContact: 85, duration: '11:30', postureScore: 82,
+            pitchVariation: 74, avgIPsPerSentence: 3.6, avgWordsPerSentence: 9,
+            lateSpeedRatio: 1.04, longPauseCount: 2, wordPauseCount: 11, fillerRate: 0.33, habitualBehaviorCount: 2
           }
         }
       ]
@@ -208,8 +224,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           date: '2024-01-20',
           score: 79,
           analysisResults: {
-            speechRate: 420, eyeContact: 70, duration: '7:45', confidence: 68,
-            fillerWordCount: 9, silenceRatio: 6, pitchScore: 58, habitualBehaviorCount: 5
+            speechRate: 358, eyeContact: 70, duration: '7:45', postureScore: 68,
+            pitchVariation: 48, avgIPsPerSentence: 5.4, avgWordsPerSentence: 13,
+            lateSpeedRatio: 1.15, longPauseCount: 4, wordPauseCount: 23, fillerRate: 0.60, habitualBehaviorCount: 5
           }
         }
       ]
@@ -268,40 +285,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const hash = sessionId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
           const seed = hash + attemptNumber;
 
-          const baseSpeechRate = 350 + (seed % 30);
-          const baseEyeContact = 75 + (seed % 10);
-          const baseDurationMin = 8 + (seed % 2);
+          const baseSpeechRate = 285 + (seed % 75);
+          const baseEyeContact = 72 + (seed % 18);
+          const baseDurationMin = 8 + (seed % 3);
           const baseDurationSec = (seed % 4) * 15;
-          const baseConfidence = 72 + (seed % 15);
-          const baseFillerCount = 6 + (seed % 5);
-          const baseSilenceRatio = 8 + (seed % 6);
-          const basePitchScore = 55 + (seed % 20);
-          const baseHabitualCount = 5 + (seed % 4);
+          const basePostureScore = 68 + (seed % 22);
+          const baseHabitualCount = 2 + (seed % 6);
+          const basePitchVariation = 55 + (seed % 45);
+          const baseIPsPerSentence = parseFloat((2.0 + (seed % 9) * 0.5).toFixed(1));
+          const baseWordsPerSentence = 8 + (seed % 9);
+          const baseLateSpeedRatio = parseFloat((1.0 + (seed % 14) * 0.01).toFixed(2));
+          const baseLongPauseCount = seed % 7;
+          const baseWordPauseCount = 5 + (seed % 22);
+          const baseFillerRate = parseFloat((0.15 + (seed % 8) * 0.08).toFixed(2));
 
-          let speechRate, eyeContact, durationMin, durationSec, confidence;
-          let fillerWordCount, silenceRatio, pitchScore, habitualBehaviorCount;
+          let speechRate, eyeContact, durationMin, durationSec, postureScore;
+          let pitchVariation, avgIPsPerSentence, avgWordsPerSentence, lateSpeedRatio;
+          let longPauseCount, wordPauseCount, fillerRate, habitualBehaviorCount;
 
           if (attemptNumber === 1) {
             speechRate = baseSpeechRate;
             eyeContact = baseEyeContact;
             durationMin = baseDurationMin;
             durationSec = baseDurationSec;
-            confidence = baseConfidence;
-            fillerWordCount = baseFillerCount;
-            silenceRatio = baseSilenceRatio;
-            pitchScore = basePitchScore;
+            postureScore = basePostureScore;
+            pitchVariation = basePitchVariation;
+            avgIPsPerSentence = baseIPsPerSentence;
+            avgWordsPerSentence = baseWordsPerSentence;
+            lateSpeedRatio = baseLateSpeedRatio;
+            longPauseCount = baseLongPauseCount;
+            wordPauseCount = baseWordPauseCount;
+            fillerRate = baseFillerRate;
             habitualBehaviorCount = baseHabitualCount;
           } else {
-            speechRate = baseSpeechRate - 30 - (seed % 20);
+            speechRate = Math.max(240, Math.min(360, baseSpeechRate - 20 + (seed % 10) - 5));
             eyeContact = Math.min(95, baseEyeContact + 5 + (seed % 10));
             const totalSec = (baseDurationMin * 60 + baseDurationSec) + 30 + (seed % 30);
             durationMin = Math.floor(totalSec / 60);
             durationSec = totalSec % 60;
-            confidence = Math.min(95, baseConfidence + 10 + (seed % 8));
-            fillerWordCount = Math.max(1, baseFillerCount - 3);
-            silenceRatio = Math.min(15, baseSilenceRatio + 2);
-            pitchScore = Math.min(95, basePitchScore + 15);
-            habitualBehaviorCount = Math.max(0, baseHabitualCount - 3);
+            postureScore = Math.min(95, basePostureScore + 10 + (seed % 8));
+            pitchVariation = Math.max(50, Math.min(110, basePitchVariation + 10));
+            avgIPsPerSentence = parseFloat(Math.max(1.5, baseIPsPerSentence - 1.0).toFixed(1));
+            avgWordsPerSentence = Math.max(7, baseWordsPerSentence - 2);
+            lateSpeedRatio = parseFloat(Math.max(0.97, baseLateSpeedRatio - 0.05).toFixed(2));
+            longPauseCount = Math.max(0, baseLongPauseCount - 2);
+            wordPauseCount = Math.max(3, baseWordPauseCount - 7);
+            fillerRate = parseFloat(Math.max(0.10, baseFillerRate - 0.15).toFixed(2));
+            habitualBehaviorCount = Math.max(0, baseHabitualCount - 2);
           }
 
           return {
@@ -319,7 +349,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 analysisResults: {
                   speechRate, eyeContact,
                   duration: `${durationMin}:${durationSec.toString().padStart(2, '0')}`,
-                  confidence, fillerWordCount, silenceRatio, pitchScore, habitualBehaviorCount
+                  postureScore, pitchVariation, avgIPsPerSentence, avgWordsPerSentence,
+                  lateSpeedRatio, longPauseCount, wordPauseCount, fillerRate, habitualBehaviorCount
                 }
               }
             ]

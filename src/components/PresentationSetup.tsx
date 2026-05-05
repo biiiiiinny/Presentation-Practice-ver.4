@@ -81,12 +81,26 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
     setIsDragging(false);
   };
 
+  const SUPPORTED_TYPES = ['video/mp4', 'video/webm', 'video/ogg'];
+  const SUPPORTED_EXTS = ['.mp4', '.webm', '.ogg'];
+
+  const checkVideoSupport = (file: File): string | null => {
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (SUPPORTED_TYPES.includes(file.type) || SUPPORTED_EXTS.includes(ext)) return null;
+    return `${ext} 형식은 브라우저에서 재생할 수 없습니다. MP4 또는 WebM으로 변환 후 업로드해주세요.`;
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    
+
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith('video/')) {
+      const err = checkVideoSupport(file);
+      if (err) {
+        setErrors(prev => ({ ...prev, video: err }));
+        return;
+      }
       setVideoFile(file);
       setErrors(prev => ({ ...prev, video: undefined }));
     }
@@ -95,6 +109,12 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      const err = checkVideoSupport(file);
+      if (err) {
+        setErrors(prev => ({ ...prev, video: err }));
+        e.target.value = '';
+        return;
+      }
       setVideoFile(file);
       setErrors(prev => ({ ...prev, video: undefined }));
     }
@@ -197,7 +217,7 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="video/*"
+                accept="video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg"
                 onChange={handleFileSelect}
                 className="hidden"
               />
@@ -229,7 +249,7 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
                     클릭하거나 파일을 드래그하여 업로드
                   </p>
                   <p className="text-sm text-slate-500">
-                    MP4, MOV, AVI 등 비디오 파일 지원
+                    MP4, WebM, OGG 비디오 파일 지원
                   </p>
                 </div>
               )}
