@@ -9,3 +9,6 @@ node_modules/
 Thumbs.db
 
 .env
+
+# json 예시파일
+pitch_example.json
