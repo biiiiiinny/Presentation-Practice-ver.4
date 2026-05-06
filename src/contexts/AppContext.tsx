@@ -7,6 +7,18 @@ export interface IssueSegment {
   label: string;
 }
 
+// 백엔드 연동 시: LLM이 생성한 항목을 이 타입으로 저장
+export interface ChecklistItem {
+  id: string;
+  label: string;          // 사용자에게 보여줄 자연어 설명
+  category: 'voice' | 'posture';
+  metric_key: string | null;               // 자동 달성 판정에 사용할 지표 키
+  condition?: 'in_range' | 'gte' | 'lte'; // 판정 조건
+  target_min?: number;
+  target_max?: number;
+  is_completed: boolean;  // 사용자가 스스로 연습하여 완료했다고 체크했는지
+}
+
 export interface Attempt {
   id: string;
   date: string;
@@ -28,6 +40,7 @@ export interface Attempt {
     habitualBehaviorCount?: number;
     issueSegments?: IssueSegment[];
   };
+  checklist?: ChecklistItem[]; // 사용자가 저장한 다음 회차 목표 체크리스트
 }
 
 export interface Session {
@@ -85,6 +98,7 @@ interface AppContextType {
   addNotification: (sessionId: string, title: string) => void;
   markNotificationAsRead: (id: string) => void;
   clearAllNotifications: () => void;
+  saveChecklist: (sessionId: string, attemptId: string, items: ChecklistItem[]) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -457,6 +471,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotifications([]);
   };
 
+  const saveChecklist = (sessionId: string, attemptId: string, items: ChecklistItem[]) => {
+    setSessions(prev => prev.map(s =>
+      s.id === sessionId
+        ? { ...s, attempts: s.attempts.map(a =>
+            a.id === attemptId ? { ...a, checklist: items } : a
+          )}
+        : s
+    ));
+  };
+
   // ─── createSession: 발표 설정 완료 시 세션 먼저 생성 ─────────────────────
   const createSession = (formData: any): string => {
     if (currentSessionId) {
@@ -519,6 +543,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     markNotificationAsRead,
     clearAllNotifications,
     createSession,
+    saveChecklist,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
