@@ -1,21 +1,23 @@
 import { useNavigate, useParams } from 'react-router';
 import { useApp } from '../contexts/AppContext';
+import type { ChecklistItem } from '../contexts/AppContext';
 import { VideoPlayer } from '../components/VideoPlayer';
 import {
-  ArrowLeft, TrendingUp, TrendingDown, Minus, Eye, Mic,
-  CheckCircle, XCircle, AlertTriangle, Clock, Award,
+  ArrowLeft, TrendingUp, Minus, Eye, Mic,
+  CheckCircle, XCircle, AlertTriangle, Clock, Award, Activity,
 } from 'lucide-react';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
   PolarRadiusAxis, ResponsiveContainer, Legend, Tooltip as RechartsTooltip,
+  AreaChart, Area,
 } from 'recharts';
 
 // ── 기준값 ────────────────────────────────────────────────────────────────────
 // 발화속도: 아나운서 표준 발화속도(300~350자/분) 참고, 일반 발표 여유 마진 포함
-const SPEECH_MIN = 280;
-const SPEECH_MAX = 400;
-const EYE_THRESHOLD = 70;       // 정면 응시 권장 기준 (70% 이상)
-const CONFIDENCE_THRESHOLD = 70; // 자신감 권장 기준 (70점 이상)
+const SPEECH_MIN = 270;
+const SPEECH_MAX = 330;
+const EYE_THRESHOLD = 70;        // 정면 응시 권장 기준 (70% 이상)
+const CONFIDENCE_THRESHOLD = 70; // 자세 안정성 권장 기준 (70점 이상)
 const DURATION_TOLERANCE = 0.1;  // 목표 시간 ±10% 허용
 
 type ImprovementStatus = 'improved' | 'partial' | 'maintained' | 'worsened' | 'overcorrected';
@@ -34,19 +36,8 @@ const getSpeechRateCategory = (rate: number): '느림' | '적정' | '빠름' => 
   return '빠름';
 };
 
-// 레이더 차트용 발화속도 점수 (0~100): 적정 범위일수록 높음
-const getSpeechRateScore = (rate: number): number => {
-  if (rate >= SPEECH_MIN && rate <= SPEECH_MAX) return 100;
-  if (rate > SPEECH_MAX) return Math.max(0, Math.round(100 - (rate - SPEECH_MAX) * 0.5));
-  return Math.max(0, Math.round(100 - (SPEECH_MIN - rate) * 0.5));
-};
 
-// 시간준수 점수 (0~100): 목표 시간 대비 오차가 클수록 낮음
-const getDurationScore = (actualSec: number, limitSec: number): number => {
-  if (limitSec <= 0) return 75;
-  const deviation = Math.abs(actualSec - limitSec) / limitSec;
-  return Math.max(0, Math.round(100 - deviation * 300));
-};
+
 
 const durationToSeconds = (d: string): number => {
   const [m, s] = d.split(':').map(Number);
@@ -124,21 +115,117 @@ const analyzeDuration = (sec1: number, sec2: number, limitSec: number): Improvem
   return { status: 'worsened', rate: null, label: '시간 오차 증가' };
 };
 
+
+// ── 3단계 레벨 변환 함수 (0=개선필요, 1=주의, 2=적정) ─────────────────────────
+const toSpeechLevel = (rate: number): number =>
+  rate >= 270 && rate <= 330 ? 3 : rate >= 240 && rate <= 360 ? 2 : 1;
+const toPitchLevel = (hz: number): number =>
+  hz >= 15 && hz <= 35 ? 3 : hz >= 8 && hz <= 50 ? 2 : 1;
+const toPostureLevel = (score: number): number => score >= 70 ? 3 : score >= 50 ? 2 : 1;
+const toEyeLevel = (pct: number): number => pct >= 70 ? 3 : pct >= 50 ? 2 : 1;
+
+// ── 체크리스트 헬퍼 ───────────────────────────────────────────────────────────
+
+function generateMockChecklist(ar: {
+  speechRate: number; eyeContact: number; pitchVariation: number;
+}): ChecklistItem[] {
+  const items: ChecklistItem[] = [];
+  if (ar.speechRate < 270 || ar.speechRate > 330)
+    items.push({ id: 'speechRate', category: 'voice', metric_key: 'speechRate',
+      condition: 'in_range', target_min: 270, target_max: 330, is_completed: false,
+      label: ar.speechRate < 270
+        ? `발화 속도 높이기 · 현재 ${ar.speechRate}음절/분 → 목표 270–330`
+        : `발화 속도 줄이기 · 현재 ${ar.speechRate}음절/분 → 목표 270–330` });
+  if (ar.pitchVariation < 15 || ar.pitchVariation > 35)
+    items.push({ id: 'pitchVariation', category: 'voice', metric_key: 'pitchVariation',
+      condition: 'in_range', target_min: 15, target_max: 35, is_completed: false,
+      label: ar.pitchVariation < 15
+        ? `피치 변화폭 늘리기 · 현재 ${ar.pitchVariation}Hz → 목표 15–35Hz`
+        : `피치 변화폭 줄이기 · 현재 ${ar.pitchVariation}Hz → 목표 15–35Hz` });
+  if (ar.eyeContact < 70)
+    items.push({ id: 'eyeContact', category: 'posture', metric_key: 'eyeContact',
+      condition: 'gte', target_min: 70, is_completed: false,
+      label: `정면 응시 비율 높이기 · 현재 ${ar.eyeContact}% → 목표 70% 이상` });
+  return items;
+}
+
+function checkActuallyAchieved(item: ChecklistItem, data: Record<string, number | undefined>): boolean {
+  if (!item.metric_key) return false;
+  const val = data[item.metric_key];
+  if (val == null) return false;
+  if (item.condition === 'in_range')
+    return val >= (item.target_min ?? -Infinity) && val <= (item.target_max ?? Infinity);
+  if (item.condition === 'gte') return val >= (item.target_min ?? -Infinity);
+  if (item.condition === 'lte') return val <= (item.target_max ?? Infinity);
+  return false;
+}
+
+function getMetricDisplay(item: ChecklistItem, data: Record<string, number | undefined>): string {
+  if (!item.metric_key) return '—';
+  const val = data[item.metric_key];
+  if (val == null) return '—';
+  if (item.metric_key === 'speechRate') return `${val}음절/분`;
+  if (item.metric_key === 'pitchVariation') return `${val}Hz`;
+  if (item.metric_key === 'eyeContact') return `${val}%`;
+  return String(val);
+}
+
+// ── KPI 비교 스파크라인 헬퍼 ──────────────────────────────────────────────────
+function generateCompSparkline(base: number, seed: number, count = 12): number[] {
+  return Array.from({ length: count }, (_, i) =>
+    Math.round(base * (1 + Math.sin(i * 0.9 + seed) * 0.1))
+  );
+}
+
+const analyzePitchVariation = (p1: number, p2: number): ImprovementResult => {
+  const inRange1 = p1 >= 70 && p1 <= 90;
+  const inRange2 = p2 >= 70 && p2 <= 90;
+  if (inRange1) {
+    return inRange2
+      ? { status: 'maintained', rate: null, label: '적정 범위 유지' }
+      : { status: 'worsened', rate: null, label: '적정 범위 이탈' };
+  }
+  if (inRange2) return { status: 'improved', rate: 100, label: '적정 범위 진입 (완전 개선)' };
+  const dist1 = p1 < 70 ? 70 - p1 : p1 - 90;
+  const dist2 = p2 < 70 ? 70 - p2 : p2 - 90;
+  if (dist2 < dist1) {
+    const rate = Math.min(99, Math.round((dist1 - dist2) / dist1 * 100));
+    return { status: 'partial', rate, label: `${rate}% 개선` };
+  }
+  return { status: 'worsened', rate: null, label: '범위 이탈 증가' };
+};
+
+const analyzeLateSpeed = (r1: number, r2: number): ImprovementResult => {
+  const good1 = Math.abs(r1 - 1.0) <= 0.05;
+  const good2 = Math.abs(r2 - 1.0) <= 0.05;
+  if (good1) {
+    return good2
+      ? { status: 'maintained', rate: null, label: '균등 속도 유지' }
+      : { status: 'worsened', rate: null, label: '후반부 속도 불균등 증가' };
+  }
+  if (good2) return { status: 'improved', rate: 100, label: '균등 속도 달성 (완전 개선)' };
+  const dev1 = Math.abs(r1 - 1.0);
+  const dev2 = Math.abs(r2 - 1.0);
+  if (dev2 < dev1) {
+    const rate = Math.min(99, Math.round((dev1 - dev2) / (dev1 - 0.05) * 100));
+    return { status: 'partial', rate, label: `${rate}% 개선` };
+  }
+  return { status: 'worsened', rate: null, label: '후반부 속도 불균등 악화' };
+};
+
 // ── 상태 배지 컴포넌트 ─────────────────────────────────────────────────────────
-function StatusBadge({ status, rate }: { status: ImprovementStatus; rate: number | null }) {
+function StatusBadge({ status }: { status: ImprovementStatus }) {
   const base = 'flex items-center gap-1.5 font-semibold text-sm';
   if (status === 'improved') return (
     <div className={`${base} text-green-700`}>
       <CheckCircle className="w-4 h-4" />
       <span>개선됨</span>
-      {rate !== null && <span className="text-xs bg-green-100 px-1.5 py-0.5 rounded-full">{rate}%</span>}
     </div>
   );
   if (status === 'partial') return (
     <div className={`${base} text-blue-600`}>
       <TrendingUp className="w-4 h-4" />
       <span>부분 개선</span>
-      {rate !== null && <span className="text-xs bg-blue-100 px-1.5 py-0.5 rounded-full">{rate}%</span>}
     </div>
   );
   if (status === 'maintained') return (
@@ -161,6 +248,98 @@ function StatusBadge({ status, rate }: { status: ImprovementStatus; rate: number
   );
 }
 
+// ── KPI 비교 카드 ─────────────────────────────────────────────────────────────
+const C1 = '#6366f1'; // 1회차 indigo
+const C2 = '#10b981'; // 2회차 emerald
+
+const LEVEL_BADGE: Record<number, { label: string; cls: string }> = {
+  1: { label: '개선필요', cls: 'bg-red-100 text-red-700' },
+  2: { label: '주의',    cls: 'bg-orange-100 text-orange-700' },
+  3: { label: '적정',   cls: 'bg-green-100 text-green-700' },
+};
+
+function KPICompareCard({
+  label, unit, val1, val2, spark1, spark2, trend, gradKey, level1, level2,
+}: {
+  label: string; unit: string; val1: string; val2: string;
+  spark1: number[]; spark2: number[]; trend: 'up' | 'down' | 'flat';
+  gradKey: string; level1: number; level2: number;
+}) {
+  const chartData = spark1.map((v, i) => ({ i, v1: v, v2: spark2[i] }));
+  const gradId1 = `cg1-${gradKey}`;
+  const gradId2 = `cg2-${gradKey}`;
+  const b1 = LEVEL_BADGE[level1];
+  const b2 = LEVEL_BADGE[level2];
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col p-3 gap-1.5 min-w-0">
+      {/* 헤더 행: 라벨 + 트렌드 배지 */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-slate-500 truncate">{label}</p>
+        {trend === 'up' ? (
+          <span className="text-xs font-bold text-green-600 flex-shrink-0">▲</span>
+        ) : trend === 'down' ? (
+          <span className="text-xs font-bold text-red-600 flex-shrink-0">▼</span>
+        ) : (
+          <span className="text-xs font-bold text-slate-400 flex-shrink-0">—</span>
+        )}
+      </div>
+      {/* 수치 행 */}
+      <div className="flex flex-col gap-0.5">
+        <div className="flex items-center gap-1">
+          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: C1 }} />
+          <span className="text-xs text-slate-400">1회차</span>
+          <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ml-auto ${b1.cls}`}>{b1.label}</span>
+          <span className="text-lg font-bold text-slate-800 leading-none">{val1}</span>
+          <span className="text-xs text-slate-400">{unit}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: C2 }} />
+          <span className="text-xs text-slate-400">2회차</span>
+          <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ml-auto ${b2.cls}`}>{b2.label}</span>
+          <span className="text-lg font-bold text-slate-800 leading-none">{val2}</span>
+          <span className="text-xs text-slate-400">{unit}</span>
+        </div>
+      </div>
+      {/* 스파크라인 */}
+      <div className="mt-0.5">
+        <ResponsiveContainer width="100%" height={44}>
+          <AreaChart data={chartData} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id={gradId1} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%"  stopColor={C1} stopOpacity={0.2} />
+                <stop offset="95%" stopColor={C1} stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id={gradId2} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%"  stopColor={C2} stopOpacity={0.2} />
+                <stop offset="95%" stopColor={C2} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <Area type="monotone" dataKey="v1" stroke={C1} fill={`url(#${gradId1})`} strokeWidth={1.5} dot={false} />
+            <Area type="monotone" dataKey="v2" stroke={C2} fill={`url(#${gradId2})`} strokeWidth={1.5} dot={false} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ── 레이더 차트 커스텀 툴팁 ───────────────────────────────────────────────────
+const RADAR_LEVEL_LABEL: Record<number, string> = { 1: '개선필요', 2: '주의', 3: '적정' };
+
+const ComparisonRadarTooltip = ({ active, payload }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg text-xs">
+      <p className="font-semibold text-slate-800 mb-1">{payload[0]?.payload?.metric}</p>
+      {payload.map((p: any) => (
+        <p key={p.dataKey} style={{ color: p.color }} className="mt-0.5">
+          {p.name}: {RADAR_LEVEL_LABEL[p.value as number]}
+        </p>
+      ))}
+    </div>
+  );
+};
+
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 export default function ComparisonPage() {
   const navigate = useNavigate();
@@ -178,10 +357,14 @@ export default function ComparisonPage() {
   const attempt2 = currentSession.attempts[1];
 
   const attempt1Data = attempt1.analysisResults ?? {
-    speechRate: 360, eyeContact: 78, duration: '8:30', confidence: 75,
+    speechRate: 360, eyeContact: 78, duration: '8:30', postureScore: 75,
+    pitchVariation: 75, avgIPsPerSentence: 3.5, avgWordsPerSentence: 10,
+    lateSpeedRatio: 1.05, longPauseCount: 2, wordPauseCount: 12, fillerRate: 0.35,
   };
   const attempt2Data = attempt2.analysisResults ?? {
-    speechRate: 330, eyeContact: 85, duration: '9:00', confidence: 85,
+    speechRate: 330, eyeContact: 85, duration: '9:00', postureScore: 85,
+    pitchVariation: 80, avgIPsPerSentence: 2.9, avgWordsPerSentence: 10,
+    lateSpeedRatio: 1.02, longPauseCount: 1, wordPauseCount: 9, fillerRate: 0.28,
   };
 
   const attempt1Seconds = durationToSeconds(attempt1Data.duration);
@@ -190,33 +373,19 @@ export default function ComparisonPage() {
     ? parseInt(currentSession.formData.timeLimit) * 60 : 0;
 
   // ── 개선 분석 ──────────────────────────────────────────────────────────────
-  const speechImprovement   = analyzeSpeechRate(attempt1Data.speechRate, attempt2Data.speechRate);
-  const eyeImprovement      = analyzeEyeContact(attempt1Data.eyeContact, attempt2Data.eyeContact);
-  const confidenceImprovement = analyzeConfidence(attempt1Data.confidence, attempt2Data.confidence);
-  const durationImprovement = analyzeDuration(attempt1Seconds, attempt2Seconds, timeLimitSeconds);
+  const speechImprovement     = analyzeSpeechRate(attempt1Data.speechRate, attempt2Data.speechRate);
+  const eyeImprovement        = analyzeEyeContact(attempt1Data.eyeContact, attempt2Data.eyeContact);
+  const postureScoreImprovement = analyzeConfidence(attempt1Data.postureScore, attempt2Data.postureScore);
+  const durationImprovement   = analyzeDuration(attempt1Seconds, attempt2Seconds, timeLimitSeconds);
+  const pitchImprovement      = analyzePitchVariation(attempt1Data.pitchVariation ?? 75, attempt2Data.pitchVariation ?? 75);
+  const lateSpeedImprovement  = analyzeLateSpeed(attempt1Data.lateSpeedRatio ?? 1.05, attempt2Data.lateSpeedRatio ?? 1.05);
 
   // ── 레이더 차트 데이터 ─────────────────────────────────────────────────────
   const radarData = [
-    {
-      metric: '발화속도',
-      '1회차': getSpeechRateScore(attempt1Data.speechRate),
-      '2회차': getSpeechRateScore(attempt2Data.speechRate),
-    },
-    {
-      metric: '눈맞춤',
-      '1회차': attempt1Data.eyeContact,
-      '2회차': attempt2Data.eyeContact,
-    },
-    {
-      metric: '자신감',
-      '1회차': attempt1Data.confidence,
-      '2회차': attempt2Data.confidence,
-    },
-    {
-      metric: '시간준수',
-      '1회차': getDurationScore(attempt1Seconds, timeLimitSeconds),
-      '2회차': getDurationScore(attempt2Seconds, timeLimitSeconds),
-    },
+    { metric: '발화 속도',  '1회차': toSpeechLevel(attempt1Data.speechRate),           '2회차': toSpeechLevel(attempt2Data.speechRate) },
+    { metric: '피치 변화폭', '1회차': toPitchLevel(attempt1Data.pitchVariation ?? 75), '2회차': toPitchLevel(attempt2Data.pitchVariation ?? 75) },
+    { metric: '자세',       '1회차': toPostureLevel(attempt1Data.postureScore),         '2회차': toPostureLevel(attempt2Data.postureScore) },
+    { metric: '정면 응시',  '1회차': toEyeLevel(attempt1Data.eyeContact),              '2회차': toEyeLevel(attempt2Data.eyeContact) },
   ];
 
   // ── 피드백 수용 현황 아이템 ────────────────────────────────────────────────
@@ -224,10 +393,34 @@ export default function ComparisonPage() {
     {
       title: '발화 속도',
       icon: <Mic className="w-4 h-4" />,
-      attempt1Value: `${attempt1Data.speechRate}자/분 (${getSpeechRateCategory(attempt1Data.speechRate)})`,
-      attempt2Value: `${attempt2Data.speechRate}자/분 (${getSpeechRateCategory(attempt2Data.speechRate)})`,
+      attempt1Value: `${attempt1Data.speechRate}음절/분 (${getSpeechRateCategory(attempt1Data.speechRate)})`,
+      attempt2Value: `${attempt2Data.speechRate}음절/분 (${getSpeechRateCategory(attempt2Data.speechRate)})`,
       result: speechImprovement,
-      note: '기준: 280~400자/분 (아나운서 표준 발화속도 참고)',
+      note: '기준: 270~330음절/분',
+    },
+    {
+      title: '피치 변화폭',
+      icon: <Activity className="w-4 h-4" />,
+      attempt1Value: `${attempt1Data.pitchVariation ?? 75}Hz`,
+      attempt2Value: `${attempt2Data.pitchVariation ?? 75}Hz`,
+      result: pitchImprovement,
+      note: '기준: 70~90Hz',
+    },
+    {
+      title: '후반부 말속도',
+      icon: <Activity className="w-4 h-4" />,
+      attempt1Value: `${attempt1Data.lateSpeedRatio ?? 1.05}배`,
+      attempt2Value: `${attempt2Data.lateSpeedRatio ?? 1.05}배`,
+      result: lateSpeedImprovement,
+      note: '기준: 1.0 ± 0.05',
+    },
+    {
+      title: '자세 안정성',
+      icon: <Award className="w-4 h-4" />,
+      attempt1Value: `${attempt1Data.postureScore}점`,
+      attempt2Value: `${attempt2Data.postureScore}점`,
+      result: postureScoreImprovement,
+      note: '기준: 70점 이상',
     },
     {
       title: '정면 응시',
@@ -235,18 +428,10 @@ export default function ComparisonPage() {
       attempt1Value: `${attempt1Data.eyeContact}%`,
       attempt2Value: `${attempt2Data.eyeContact}%`,
       result: eyeImprovement,
-      note: '기준: 70% 이상 권장',
-    },
-    {
-      title: '자신감 지수',
-      icon: <Award className="w-4 h-4" />,
-      attempt1Value: `${attempt1Data.confidence}점`,
-      attempt2Value: `${attempt2Data.confidence}점`,
-      result: confidenceImprovement,
-      note: '기준: 70점 이상 권장',
+      note: '기준: 70% 이상',
     },
     ...(timeLimitSeconds > 0 ? [{
-      title: '발표 시간 준수',
+      title: '발표 시간',
       icon: <Clock className="w-4 h-4" />,
       attempt1Value: attempt1Data.duration,
       attempt2Value: attempt2Data.duration,
@@ -275,29 +460,50 @@ export default function ComparisonPage() {
     return '이번 재발표에서 전반적인 개선이 확인되지 않았습니다. 1회차 피드백을 다시 확인하고 항목별 개선 목표를 설정해 재도전해보세요.';
   })();
 
-  // ── 지표 카드 공통 헬퍼 ───────────────────────────────────────────────────
-  const getChangeIcon = (improved: boolean, change: number) => {
-    if (change === 0) return <Minus className="w-4 h-4 text-slate-500" />;
-    return improved
-      ? <TrendingUp className="w-4 h-4 text-green-600" />
-      : <TrendingDown className="w-4 h-4 text-red-600" />;
+  const p1 = attempt1Data.pitchVariation ?? 75;
+  const p2 = attempt2Data.pitchVariation ?? 75;
+
+  const speechTrend: 'up' | 'down' | 'flat' =
+    attempt2Data.speechRate > attempt1Data.speechRate ? 'up' :
+    attempt2Data.speechRate < attempt1Data.speechRate ? 'down' : 'flat';
+  const pitchTrend: 'up' | 'down' | 'flat' =
+    p2 > p1 ? 'up' : p2 < p1 ? 'down' : 'flat';
+  const eyeTrend: 'up' | 'down' | 'flat' =
+    attempt2Data.eyeContact > attempt1Data.eyeContact ? 'up' :
+    attempt2Data.eyeContact < attempt1Data.eyeContact ? 'down' : 'flat';
+
+  // ── 자가 체크리스트 비교 ───────────────────────────────────────────────────
+  const checklistItems: ChecklistItem[] = attempt1.checklist?.length
+    ? attempt1.checklist
+    : generateMockChecklist({
+        speechRate: attempt1Data.speechRate,
+        eyeContact: attempt1Data.eyeContact,
+        pitchVariation: attempt1Data.pitchVariation ?? 75,
+      });
+
+  const attempt2DataMap: Record<string, number | undefined> = {
+    speechRate: attempt2Data.speechRate,
+    eyeContact: attempt2Data.eyeContact,
+    pitchVariation: attempt2Data.pitchVariation,
   };
-  const getChangeColor = (improved: boolean, change: number) => {
-    if (change === 0) return 'text-slate-600';
-    return improved ? 'text-green-600' : 'text-red-600';
+  const attempt1DataMap: Record<string, number | undefined> = {
+    speechRate: attempt1Data.speechRate,
+    eyeContact: attempt1Data.eyeContact,
+    pitchVariation: attempt1Data.pitchVariation,
   };
 
-  const speechRateImproved = getSpeechRateScore(attempt2Data.speechRate) > getSpeechRateScore(attempt1Data.speechRate);
-  const speechRateChange   = attempt2Data.speechRate - attempt1Data.speechRate;
-  const eyeChange          = attempt2Data.eyeContact - attempt1Data.eyeContact;
-  const confidenceChange   = attempt2Data.confidence - attempt1Data.confidence;
-  const durationDiff       = attempt2Seconds - attempt1Seconds;
+  const speechSpark1 = generateCompSparkline(attempt1Data.speechRate, 1);
+  const speechSpark2 = generateCompSparkline(attempt2Data.speechRate, 2);
+  const pitchSpark1  = generateCompSparkline(p1, 3);
+  const pitchSpark2  = generateCompSparkline(p2, 4);
+  const eyeSpark1    = generateCompSparkline(attempt1Data.eyeContact, 5);
+  const eyeSpark2    = generateCompSparkline(attempt2Data.eyeContact, 6);
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
       {/* 헤더 */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-4">
+      <div className="bg-white border-b border-slate-200 flex-shrink-0">
+        <div className="px-6 py-4 flex items-center gap-4">
           <button
             onClick={() => navigate(`/presentation/results/${sessionId}/2`)}
             className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
@@ -311,246 +517,219 @@ export default function ComparisonPage() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+      {/* 메인 콘텐츠 */}
+      <div className="flex-1 flex gap-4 p-4 overflow-hidden">
 
-        {/* ⓪ 영상 비교 */}
-        <div className="bg-white rounded-xl shadow-lg p-6 border border-slate-200">
-          <h2 className="text-xl font-bold text-slate-900 mb-4">영상 비교</h2>
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <p className="text-sm font-semibold text-slate-600 mb-2">1회차</p>
-              {attempt1.videoUrl ? (
-                <VideoPlayer videoUrl={attempt1.videoUrl} />
-              ) : (
-                <div className="bg-slate-100 rounded-xl aspect-video flex items-center justify-center">
-                  <span className="text-slate-400 text-sm">업로드된 영상 없음</span>
-                </div>
-              )}
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-600 mb-2">2회차</p>
-              {attempt2.videoUrl ? (
-                <VideoPlayer videoUrl={attempt2.videoUrl} />
-              ) : (
-                <div className="bg-slate-100 rounded-xl aspect-video flex items-center justify-center">
-                  <span className="text-slate-400 text-sm">업로드된 영상 없음</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ① 종합 비교 차트 (레이더) */}
-        <div className="bg-white rounded-xl shadow-lg p-6 border border-slate-200">
-          <h2 className="text-xl font-bold text-slate-900 mb-1">종합 비교 차트</h2>
-          <p className="text-sm text-slate-500 mb-6">
-            각 항목을 0~100점으로 정규화한 점수입니다.
-            발화속도는 적정 범위(280~400자/분)에 가까울수록 높은 점수입니다.
-          </p>
-          <ResponsiveContainer width="100%" height={360}>
-            <RadarChart data={radarData}>
-              <PolarGrid stroke="#e2e8f0" />
-              <PolarAngleAxis
-                dataKey="metric"
-                tick={{ fill: '#475569', fontSize: 13, fontWeight: 600 }}
-              />
-              <PolarRadiusAxis
-                angle={90}
-                domain={[0, 100]}
-                tickCount={5}
-                tick={{ fill: '#94a3b8', fontSize: 11 }}
-              />
-              <Radar
-                name="1회차"
-                dataKey="1회차"
-                stroke="#6366f1"
-                fill="#6366f1"
-                fillOpacity={0.2}
-                strokeWidth={2}
-              />
-              <Radar
-                name="2회차"
-                dataKey="2회차"
-                stroke="#10b981"
-                fill="#10b981"
-                fillOpacity={0.2}
-                strokeWidth={2}
-              />
-              <Legend iconType="circle" />
-              <RechartsTooltip
-                formatter={(value: number | string | undefined) => [`${value ?? 0}점`, '']}
-              />
-            </RadarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* ② 피드백 수용 현황 */}
-        <div className="bg-white rounded-xl shadow-lg p-6 border border-slate-200">
-          <h2 className="text-xl font-bold text-slate-900 mb-1">피드백 수용 현황</h2>
-          <p className="text-sm text-slate-500 mb-5">
-            1회차 결과 기반으로 2회차에서 각 항목이 얼마나 개선됐는지 추적합니다.
-          </p>
-          <div className="space-y-3">
-            {feedbackItems.map((item, idx) => {
-              const statusColors: Record<ImprovementStatus, string> = {
-                improved:     'bg-green-50 border-green-200',
-                partial:      'bg-blue-50 border-blue-200',
-                maintained:   'bg-slate-50 border-slate-200',
-                overcorrected:'bg-yellow-50 border-yellow-200',
-                worsened:     'bg-red-50 border-red-200',
-              };
-              const iconColors: Record<ImprovementStatus, string> = {
-                improved:     'text-green-700',
-                partial:      'text-blue-700',
-                maintained:   'text-slate-500',
-                overcorrected:'text-yellow-700',
-                worsened:     'text-red-700',
-              };
-              return (
-                <div key={idx} className={`p-4 rounded-xl border ${statusColors[item.result.status]}`}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={iconColors[item.result.status]}>{item.icon}</span>
-                        <span className="font-bold text-slate-800">{item.title}</span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                        <span className="bg-white px-2 py-0.5 rounded border border-slate-200 whitespace-nowrap">
-                          1회차: {item.attempt1Value}
-                        </span>
-                        <span>→</span>
-                        <span className="bg-white px-2 py-0.5 rounded border border-slate-200 whitespace-nowrap">
-                          2회차: {item.attempt2Value}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-2">{item.note}</p>
-                    </div>
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      <StatusBadge status={item.result.status} rate={item.result.rate} />
-                      <span className="text-xs text-slate-500 text-right">{item.result.label}</span>
-                    </div>
+        {/* 왼쪽: 영상 비교 */}
+        <div className="w-1/2 flex flex-col min-w-0">
+          <div className="bg-white rounded-xl shadow-lg p-4 border border-slate-200 flex flex-col flex-1 gap-3 overflow-hidden">
+            <h2 className="text-base font-bold text-slate-900 flex-shrink-0">영상 비교</h2>
+            <div className="flex flex-col flex-1 gap-3 min-h-0">
+              <div className="flex-1 flex flex-col min-h-0">
+                <p className="text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide flex-shrink-0">1회차</p>
+                {attempt1.videoUrl ? (
+                  <div className="flex-1 min-h-0 overflow-hidden rounded-xl">
+                    <VideoPlayer videoUrl={attempt1.videoUrl} />
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ③ 주요 지표 비교 카드 */}
-        <div className="bg-white rounded-xl shadow-lg p-6 border border-slate-200">
-          <h2 className="text-xl font-bold text-slate-900 mb-6">주요 지표 비교</h2>
-          <div className="grid grid-cols-2 gap-6">
-            {/* 발화 속도 */}
-            <div className="p-5 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-200">
-              <div className="flex items-center gap-2 mb-3">
-                <Mic className="w-5 h-5 text-blue-700" />
-                <h3 className="font-bold text-blue-900">발화 속도</h3>
+                ) : (
+                  <div className="flex-1 bg-slate-100 rounded-xl flex items-center justify-center">
+                    <span className="text-slate-400 text-sm">업로드된 영상 없음</span>
+                  </div>
+                )}
               </div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-blue-800">1회차</span>
-                  <span className="text-lg font-semibold text-blue-900">{attempt1Data.speechRate} 자/분</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-blue-800">2회차</span>
-                  <span className="text-lg font-semibold text-blue-900">{attempt2Data.speechRate} 자/분</span>
-                </div>
-                <div className={`flex items-center gap-2 pt-2 border-t border-blue-300 ${getChangeColor(speechRateImproved, speechRateChange)}`}>
-                  {getChangeIcon(speechRateImproved, speechRateChange)}
-                  <span className="font-bold">{speechRateChange > 0 ? '+' : ''}{speechRateChange} 자/분</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 정면 응시 비율 */}
-            <div className="p-5 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200">
-              <div className="flex items-center gap-2 mb-3">
-                <Eye className="w-5 h-5 text-green-700" />
-                <h3 className="font-bold text-green-900">정면 응시 비율</h3>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-green-800">1회차</span>
-                  <span className="text-lg font-semibold text-green-900">{attempt1Data.eyeContact}%</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-green-800">2회차</span>
-                  <span className="text-lg font-semibold text-green-900">{attempt2Data.eyeContact}%</span>
-                </div>
-                <div className={`flex items-center gap-2 pt-2 border-t border-green-300 ${getChangeColor(eyeChange > 0, eyeChange)}`}>
-                  {getChangeIcon(eyeChange > 0, eyeChange)}
-                  <span className="font-bold">{eyeChange > 0 ? '+' : ''}{eyeChange}%p</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 발표 시간 */}
-            <div className="p-5 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl border border-purple-200">
-              <div className="flex items-center gap-2 mb-3">
-                <Clock className="w-5 h-5 text-purple-700" />
-                <h3 className="font-bold text-purple-900">발표 시간</h3>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-purple-800">1회차</span>
-                  <span className="text-lg font-semibold text-purple-900">{attempt1Data.duration}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-purple-800">2회차</span>
-                  <span className="text-lg font-semibold text-purple-900">{attempt2Data.duration}</span>
-                </div>
-                <div className="flex items-center gap-2 pt-2 border-t border-purple-300 text-slate-600">
-                  <Minus className="w-4 h-4" />
-                  <span className="font-bold">{durationDiff >= 0 ? '+' : ''}{durationDiff}초</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 자신감 */}
-            <div className="p-5 bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl border border-orange-200">
-              <div className="flex items-center gap-2 mb-3">
-                <Award className="w-5 h-5 text-orange-700" />
-                <h3 className="font-bold text-orange-900">자신감 지수</h3>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-orange-800">1회차</span>
-                  <span className="text-lg font-semibold text-orange-900">{attempt1Data.confidence}점</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-orange-800">2회차</span>
-                  <span className="text-lg font-semibold text-orange-900">{attempt2Data.confidence}점</span>
-                </div>
-                <div className={`flex items-center gap-2 pt-2 border-t border-orange-300 ${getChangeColor(confidenceChange > 0, confidenceChange)}`}>
-                  {getChangeIcon(confidenceChange > 0, confidenceChange)}
-                  <span className="font-bold">{confidenceChange > 0 ? '+' : ''}{confidenceChange}점</span>
-                </div>
+              <div className="flex-1 flex flex-col min-h-0">
+                <p className="text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide flex-shrink-0">2회차</p>
+                {attempt2.videoUrl ? (
+                  <div className="flex-1 min-h-0 overflow-hidden rounded-xl">
+                    <VideoPlayer videoUrl={attempt2.videoUrl} />
+                  </div>
+                ) : (
+                  <div className="flex-1 bg-slate-100 rounded-xl flex items-center justify-center">
+                    <span className="text-slate-400 text-sm">업로드된 영상 없음</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
 
-        {/* ④ 종합 의견 */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-lg p-6 border border-blue-200">
-          <h2 className="text-xl font-bold text-blue-900 mb-3">종합 의견</h2>
-          <p className="text-slate-700 leading-relaxed">{overallOpinion}</p>
+        {/* 오른쪽: 모든 지표 (스크롤) */}
+        <div className="w-1/2 bg-white rounded-xl shadow-lg overflow-hidden flex flex-col min-h-0">
+          <div className="flex-1 overflow-y-auto scrollbar-hide">
+
+            {/* 종합 의견 */}
+            <div className="p-5">
+              <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">종합 의견</h3>
+              <p className="text-sm text-slate-700 leading-relaxed">{overallOpinion}</p>
+            </div>
+
+            <div className="border-t border-slate-100 mx-5" />
+
+            {/* 종합 비교 차트 */}
+            <div className="p-5">
+              <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-1">종합 비교 차트</h3>
+              <p className="text-xs text-slate-500 mb-3">
+                각 항목을 개선필요 · 주의 · 적정 3단계로 평가합니다.
+              </p>
+              <ResponsiveContainer width="100%" height={260}>
+                <RadarChart data={radarData}>
+                  <PolarGrid stroke="#e2e8f0" />
+                  <PolarAngleAxis
+                    dataKey="metric"
+                    tick={{ fill: '#475569', fontSize: 12, fontWeight: 600 }}
+                  />
+                  <PolarRadiusAxis angle={90} domain={[0, 3]} tickCount={4} tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                  <Radar name="1회차" dataKey="1회차" stroke="#6366f1" fill="#6366f1" fillOpacity={0.2} strokeWidth={2} />
+                  <Radar name="2회차" dataKey="2회차" stroke="#10b981" fill="#10b981" fillOpacity={0.2} strokeWidth={2} />
+                  <Legend iconType="circle" />
+                  <RechartsTooltip content={<ComparisonRadarTooltip />} />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="border-t border-slate-100 mx-5" />
+
+            {/* 피드백 수용 현황 */}
+            <div className="p-5">
+              <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-1">피드백 수용 현황</h3>
+              <p className="text-xs text-slate-500 mb-4">1회차 결과 기반으로 2회차에서 각 항목이 얼마나 개선됐는지 추적합니다.</p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {feedbackItems.map((item, idx) => {
+                  const statusColors: Record<ImprovementStatus, string> = {
+                    improved:     'bg-green-50 border-green-200',
+                    partial:      'bg-blue-50 border-blue-200',
+                    maintained:   'bg-slate-50 border-slate-200',
+                    overcorrected:'bg-yellow-50 border-yellow-200',
+                    worsened:     'bg-red-50 border-red-200',
+                  };
+                  const iconColors: Record<ImprovementStatus, string> = {
+                    improved:     'text-green-700',
+                    partial:      'text-blue-700',
+                    maintained:   'text-slate-500',
+                    overcorrected:'text-yellow-700',
+                    worsened:     'text-red-700',
+                  };
+                  return (
+                    <div key={idx} className={`p-3 rounded-xl border ${statusColors[item.result.status]}`}>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className={iconColors[item.result.status]}>{item.icon}</span>
+                        <span className="font-bold text-slate-800 text-sm">{item.title}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-slate-600 mb-1.5 flex-wrap">
+                        <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 whitespace-nowrap">{item.attempt1Value}</span>
+                        <span className="text-slate-400">→</span>
+                        <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 whitespace-nowrap">{item.attempt2Value}</span>
+                      </div>
+                      <StatusBadge status={item.result.status} />
+                      <p className="text-xs text-slate-400 mt-1">{item.result.label}</p>
+                      <p className="text-xs text-slate-300 mt-0.5">{item.note}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 mx-5" />
+
+            {/* KPI 비교 */}
+            <div className="p-5">
+              <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-4">KPI 비교</h3>
+              <div className="grid grid-cols-3 gap-3">
+                <KPICompareCard
+                  label="발화 속도" unit="음절/분" gradKey="speech"
+                  val1={String(attempt1Data.speechRate)} val2={String(attempt2Data.speechRate)}
+                  spark1={speechSpark1} spark2={speechSpark2} trend={speechTrend}
+                  level1={toSpeechLevel(attempt1Data.speechRate)} level2={toSpeechLevel(attempt2Data.speechRate)}
+                />
+                <KPICompareCard
+                  label="피치 변화폭" unit="Hz" gradKey="pitch"
+                  val1={String(p1)} val2={String(p2)}
+                  spark1={pitchSpark1} spark2={pitchSpark2} trend={pitchTrend}
+                  level1={toPitchLevel(p1)} level2={toPitchLevel(p2)}
+                />
+                <KPICompareCard
+                  label="정면 응시" unit="%" gradKey="eye"
+                  val1={String(attempt1Data.eyeContact)} val2={String(attempt2Data.eyeContact)}
+                  spark1={eyeSpark1} spark2={eyeSpark2} trend={eyeTrend}
+                  level1={toEyeLevel(attempt1Data.eyeContact)} level2={toEyeLevel(attempt2Data.eyeContact)}
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 mx-5" />
+
+            {/* 자가 체크리스트 비교 */}
+            <div className="p-5">
+              <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-1">자가 체크리스트 비교</h3>
+              <p className="text-xs text-slate-500 mb-4">1회차에서 설정한 개선 목표가 2회차에서 실제로 달성됐는지 확인합니다.</p>
+              {checklistItems.length === 0 ? (
+                <div className="text-center py-6 text-sm text-slate-400">1회차에서 모든 지표가 적정 범위였습니다 🎉</div>
+              ) : (
+                <div className="space-y-2">
+                  {checklistItems.map(item => {
+                    const achieved = checkActuallyAchieved(item, attempt2DataMap);
+                    const selfChecked = item.is_completed;
+                    return (
+                      <div key={item.id} className={`rounded-xl border p-3 ${achieved ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-sm text-slate-800 leading-snug flex-1">{item.label}</p>
+                          <div className="flex items-center gap-3 flex-shrink-0">
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="text-[10px] text-slate-400">자기 체크</span>
+                              <span className={`text-sm font-bold ${selfChecked ? 'text-green-600' : 'text-slate-300'}`}>
+                                {selfChecked ? '✓' : '—'}
+                              </span>
+                            </div>
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="text-[10px] text-slate-400">실제 달성</span>
+                              <span className={`text-sm font-bold ${achieved ? 'text-green-600' : 'text-red-500'}`}>
+                                {achieved ? '✓' : '✗'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <span className="text-xs text-slate-400">1회차</span>
+                          <span className="text-xs font-semibold text-slate-700">{getMetricDisplay(item, attempt1DataMap)}</span>
+                          <span className="text-slate-300 text-xs">→</span>
+                          <span className="text-xs text-slate-400">2회차</span>
+                          <span className={`text-xs font-semibold ${achieved ? 'text-green-700' : 'text-red-600'}`}>
+                            {getMetricDisplay(item, attempt2DataMap)}
+                          </span>
+                        </div>
+                        {selfChecked !== achieved && (
+                          <p className="text-[10px] mt-1.5 font-semibold text-orange-600">
+                            {selfChecked && !achieved
+                              ? '⚠ 스스로 개선했다고 체크했지만 수치상 목표 미달입니다.'
+                              : '✦ 체크하지 않았지만 실제로 목표를 달성했습니다!'}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 하단 버튼 */}
+            <div className="flex gap-3 justify-center px-5 pb-6">
+              <button
+                onClick={() => navigate(`/presentation/results/${sessionId}/1`)}
+                className="flex-1 py-2.5 bg-white border-2 border-blue-900 text-blue-900 rounded-xl font-semibold hover:bg-blue-50 transition-colors text-sm"
+              >
+                1회차 결과 보기
+              </button>
+              <button
+                onClick={() => navigate(`/presentation/results/${sessionId}/2`)}
+                className="flex-1 py-2.5 bg-blue-900 text-white rounded-xl font-semibold hover:bg-blue-800 transition-colors text-sm"
+              >
+                2회차 결과 보기
+              </button>
+            </div>
+
+          </div>
         </div>
 
-        {/* 하단 버튼 */}
-        <div className="flex gap-4 justify-center pb-8">
-          <button
-            onClick={() => navigate(`/presentation/results/${sessionId}/1`)}
-            className="px-6 py-3 bg-white border-2 border-blue-900 text-blue-900 rounded-xl font-semibold hover:bg-blue-50 transition-colors"
-          >
-            1회차 결과 보기
-          </button>
-          <button
-            onClick={() => navigate(`/presentation/results/${sessionId}/2`)}
-            className="px-6 py-3 bg-blue-900 text-white rounded-xl font-semibold hover:bg-blue-800 transition-colors"
-          >
-            2회차 결과 보기
-          </button>
-        </div>
       </div>
     </div>
   );
