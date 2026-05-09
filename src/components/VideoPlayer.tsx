@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { Play, Pause, Volume2, VolumeX, SkipBack, SkipForward } from 'lucide-react';
+import { Play, Pause, Volume1, Volume2, VolumeX, Maximize2, Minimize2 } from 'lucide-react';
 import type { IssueSegment } from '../contexts/AppContext';
 
 const SEGMENT_COLOR: Record<IssueSegment['type'], string> = {
@@ -17,6 +17,7 @@ interface VideoPlayerProps {
 
 export function VideoPlayer({ videoUrl, currentTime, onTimeUpdate, className, issueSegments = [] }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -25,6 +26,12 @@ export function VideoPlayer({ videoUrl, currentTime, onTimeUpdate, className, is
   const [buffered, setBuffered] = useState(0);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
   const [hoverIssue, setHoverIssue] = useState<IssueSegment | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const prevVolumeRef = useRef(1);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'seek-back' | 'seek-forward'; animKey: number } | null>(null);
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -59,6 +66,104 @@ export function VideoPlayer({ videoUrl, currentTime, onTimeUpdate, className, is
     };
   }, [onTimeUpdate]);
 
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+      switch (e.key) {
+        case 'f':
+        case 'F':
+          toggleFullscreen();
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          skip(-5);
+          showFeedback('seek-back');
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          skip(5);
+          showFeedback('seek-forward');
+          break;
+        case 'ArrowUp': {
+          e.preventDefault();
+          const videoUp = videoRef.current;
+          if (!videoUp) break;
+          const newVol = Math.min(1, parseFloat((videoUp.volume + 0.1).toFixed(1)));
+          videoUp.volume = newVol;
+          videoUp.muted = false;
+          setVolume(newVol);
+          setIsMuted(false);
+          if (newVol > 0) prevVolumeRef.current = newVol;
+          break;
+        }
+        case 'ArrowDown': {
+          e.preventDefault();
+          const videoDown = videoRef.current;
+          if (!videoDown) break;
+          const newVol = Math.max(0, parseFloat((videoDown.volume - 0.1).toFixed(1)));
+          videoDown.volume = newVol;
+          videoDown.muted = newVol === 0;
+          setVolume(newVol);
+          setIsMuted(newVol === 0);
+          if (newVol > 0) prevVolumeRef.current = newVol;
+          break;
+        }
+        case 'm':
+        case 'M': {
+          const videoM = videoRef.current;
+          if (!videoM) break;
+          if (videoM.muted || videoM.volume === 0) {
+            const restored = prevVolumeRef.current > 0 ? prevVolumeRef.current : 1;
+            videoM.muted = false;
+            videoM.volume = restored;
+            setVolume(restored);
+            setIsMuted(false);
+          } else {
+            prevVolumeRef.current = videoM.volume;
+            videoM.muted = true;
+            setIsMuted(true);
+          }
+          break;
+        }
+        case ' ': {
+          e.preventDefault();
+          const videoSpace = videoRef.current;
+          if (!videoSpace) break;
+          if (videoSpace.paused) {
+            videoSpace.play();
+            setIsPlaying(true);
+          } else {
+            videoSpace.pause();
+            setIsPlaying(false);
+          }
+          break;
+        }
+      }
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    if (!document.fullscreenElement) {
+      container.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
   // 외부에서 currentTime prop이 변경되면 비디오 시간 변경
   useEffect(() => {
     const video = videoRef.current;
@@ -86,15 +191,36 @@ export function VideoPlayer({ videoUrl, currentTime, onTimeUpdate, className, is
     const video = videoRef.current;
     if (!video) return;
 
-    video.muted = !isMuted;
-    setIsMuted(!isMuted);
+    if (isMuted || volume === 0) {
+      const restored = prevVolumeRef.current > 0 ? prevVolumeRef.current : 1;
+      video.muted = false;
+      video.volume = restored;
+      setVolume(restored);
+      setIsMuted(false);
+    } else {
+      prevVolumeRef.current = volume;
+      video.muted = true;
+      setIsMuted(true);
+    }
+  };
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const val = parseFloat(e.target.value);
+    video.volume = val;
+    video.muted = val === 0;
+    setVolume(val);
+    setIsMuted(val === 0);
+    if (val > 0) prevVolumeRef.current = val;
   };
 
   const skip = (seconds: number) => {
     const video = videoRef.current;
     if (!video) return;
 
-    video.currentTime = Math.max(0, Math.min(duration, video.currentTime + seconds));
+    video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + seconds));
   };
 
   const handleProgressBarClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -126,6 +252,34 @@ export function VideoPlayer({ videoUrl, currentTime, onTimeUpdate, className, is
     setHoverIssue(null);
   };
 
+  const showFeedback = (type: 'seek-back' | 'seek-forward') => {
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    setFeedback({ type, animKey: Date.now() });
+    feedbackTimerRef.current = setTimeout(() => setFeedback(null), 700);
+  };
+
+
+  const handleVideoAreaClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const isLeftHalf = e.clientX < rect.left + rect.width / 2;
+      if (isLeftHalf) {
+        skip(-5);
+        showFeedback('seek-back');
+      } else {
+        skip(5);
+        showFeedback('seek-forward');
+      }
+    } else {
+      clickTimerRef.current = setTimeout(() => {
+        clickTimerRef.current = null;
+        togglePlay();
+      }, 220);
+    }
+  };
+
   const formatTime = (seconds: number) => {
     if (isNaN(seconds)) return '0:00';
     const mins = Math.floor(seconds / 60);
@@ -137,7 +291,15 @@ export function VideoPlayer({ videoUrl, currentTime, onTimeUpdate, className, is
   const getBufferedPercent = () => (duration > 0 ? (buffered / duration) * 100 : 0);
 
   return (
-    <div className={`relative bg-black w-full h-full ${className}`}>
+    <div ref={containerRef} className={`relative bg-black w-full h-full ${className}`}>
+      <style>{`
+        @keyframes feedbackFadeUp {
+          0%   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+          60%  { opacity: 1; transform: translate(-50%, -60%) scale(1.08); }
+          100% { opacity: 0; transform: translate(-50%, -70%) scale(0.95); }
+        }
+        .feedback-anim { animation: feedbackFadeUp 0.7s ease forwards; }
+      `}</style>
       {/* 비디오 - 여러 포맷 지원 */}
       <video
         ref={videoRef}
@@ -163,10 +325,36 @@ export function VideoPlayer({ videoUrl, currentTime, onTimeUpdate, className, is
         </div>
       )}
 
+      {/* 클릭/더블클릭 피드백 */}
+      {feedback && (
+        <div
+          key={feedback.animKey}
+          className="feedback-anim absolute z-[25] pointer-events-none top-1/2"
+          style={{
+            left: feedback.type === 'seek-back' ? '25%' : feedback.type === 'seek-forward' ? '75%' : '50%',
+          }}
+        >
+          <div className="bg-black/50 backdrop-blur-sm rounded-2xl px-5 py-3 text-white font-bold flex flex-col items-center gap-1">
+            {feedback.type === 'seek-back' && (
+              <>
+                <span className="text-2xl">«</span>
+                <span className="text-sm">-5초</span>
+              </>
+            )}
+            {feedback.type === 'seek-forward' && (
+              <>
+                <span className="text-2xl">»</span>
+                <span className="text-sm">+5초</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 비디오 클릭 영역 (컨트롤 제외) */}
-      <div 
+      <div
         className="absolute inset-0 z-10 cursor-pointer"
-        onClick={togglePlay}
+        onClick={handleVideoAreaClick}
       />
 
       {/* 컨트롤 바 - 완전히 하단에 고정 */}
@@ -247,21 +435,28 @@ export function VideoPlayer({ videoUrl, currentTime, onTimeUpdate, className, is
               {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
             </button>
 
-            {/* 10초 뒤로 */}
-            <button
-              onClick={() => skip(-10)}
-              className="text-white hover:text-blue-400 transition-colors"
-            >
-              <SkipBack className="w-5 h-5" />
-            </button>
-
-            {/* 10초 앞으로 */}
-            <button
-              onClick={() => skip(10)}
-              className="text-white hover:text-blue-400 transition-colors"
-            >
-              <SkipForward className="w-5 h-5" />
-            </button>
+            {/* 볼륨 */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={toggleMute}
+                className="text-white hover:text-blue-400 transition-colors"
+              >
+                {(isMuted || volume === 0)
+                  ? <VolumeX className="w-5 h-5" />
+                  : volume < 0.5
+                    ? <Volume1 className="w-5 h-5" />
+                    : <Volume2 className="w-5 h-5" />}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.02}
+                value={isMuted ? 0 : volume}
+                onChange={handleVolumeChange}
+                className="w-20 accent-white cursor-pointer"
+              />
+            </div>
 
             {/* 시간 표시 */}
             <div className="text-white text-sm font-medium font-mono">
@@ -270,12 +465,12 @@ export function VideoPlayer({ videoUrl, currentTime, onTimeUpdate, className, is
 
             <div className="flex-1" />
 
-            {/* 음소거 */}
+            {/* 전체화면 */}
             <button
-              onClick={toggleMute}
+              onClick={toggleFullscreen}
               className="text-white hover:text-blue-400 transition-colors"
             >
-              {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+              {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
             </button>
           </div>
         </div>
