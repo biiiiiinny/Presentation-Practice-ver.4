@@ -8,40 +8,15 @@ import { Mic, User, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip as RechartsTooltip,
-  AreaChart, ComposedChart, Area, XAxis, YAxis, CartesianGrid, ReferenceLine, ReferenceArea,
+  ComposedChart, Area, XAxis, YAxis, CartesianGrid, ReferenceLine, ReferenceArea,
 } from 'recharts';
 import pitchExample from '../../json_examples/pitch_example.json';
 import presentationSummary from '../../json_examples/presentation_summary.json';
 import poseData from '../../json_examples/pose.json';
 import refinerData from '../../json_examples/refiner.json';
+import refinerResult from '../../json_examples/refiner_result.json';
+import gazeResult from '../../json_examples/gaze_result.json';
 
-// ── 원형 진행 바 ──────────────────────────────────────────────────────────────
-function CircleProgress({ value, max = 100, unit = '%', label, color = '#1e3a8a' }: {
-  value: number; max?: number; unit?: string; label?: string; color?: string;
-}) {
-  const r = 36;
-  const circ = 2 * Math.PI * r;
-  const offset = circ * (1 - Math.min(value / max, 1));
-  return (
-    <div className="flex flex-col items-center gap-1.5">
-      <svg width="96" height="96" viewBox="0 0 100 100">
-        <circle cx="50" cy="50" r={r} fill="none" stroke="#e2e8f0" strokeWidth="10" />
-        <circle
-          cx="50" cy="50" r={r} fill="none" stroke={color} strokeWidth="10"
-          strokeDasharray={circ} strokeDashoffset={offset}
-          strokeLinecap="round" transform="rotate(-90 50 50)"
-        />
-        <text x="50" y="46" textAnchor="middle" fontSize="18" fontWeight="700" fill="#0f172a">
-          {value}
-        </text>
-        <text x="50" y="62" textAnchor="middle" fontSize="11" fill="#64748b">
-          {unit}
-        </text>
-      </svg>
-      {label && <span className="text-xs font-semibold text-slate-500 text-center">{label}</span>}
-    </div>
-  );
-}
 
 // ── 범위 게이지 ───────────────────────────────────────────────────────────────
 function RangeGauge({ value, optimalMin, optimalMax, unit, maxDisplay, minLabel = '낮음', maxLabel = '높음' }: {
@@ -88,45 +63,21 @@ const KPI_STATUS_STYLE: Record<KPIStatus, { badge: string; line: string; fill: s
   '경고': { badge: 'bg-red-100 text-red-700',      line: '#dc2626', fill: '#dc2626' },
 };
 
-function generateSparkline(baseValue: number, count = 24, variance = 0.13): { v: number }[] {
-  return Array.from({ length: count }, (_, i) => ({
-    v: Math.max(0, baseValue * (1 + Math.sin(i * 0.9 + baseValue * 0.03) * variance)),
-  }));
-}
-
-function KPICard({ label, value, unit, status, sparkData, gradientId }: {
+function KPICard({ label, value, unit, status }: {
   label: string; value: number; unit: string; status: KPIStatus;
-  sparkData: { v: number }[]; gradientId: string;
 }) {
   const s = KPI_STATUS_STYLE[status];
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col p-3 gap-1.5 min-w-0">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col p-3 gap-2 min-w-0">
       <p className="text-sm font-semibold text-slate-500 truncate">{label}</p>
-      <div className="flex items-center justify-between gap-1">
-        <span className="text-2xl font-bold text-slate-900 leading-none">
+      <div className="flex items-end justify-between gap-1">
+        <p className="text-2xl font-bold text-slate-900 leading-none">
           {value}
           <span className="text-sm font-normal text-slate-400 ml-1">{unit}</span>
-        </span>
-        <span className={`text-sm font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${s.badge}`}>
+        </p>
+        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${s.badge}`}>
           {status}
         </span>
-      </div>
-      <div className="mt-1">
-        <ResponsiveContainer width="100%" height={48}>
-          <AreaChart data={sparkData} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
-            <defs>
-              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor={s.fill} stopOpacity={0.25} />
-                <stop offset="95%" stopColor={s.fill} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <Area
-              type="monotone" dataKey="v"
-              stroke={s.line} strokeWidth={1.5}
-              fill={`url(#${gradientId})`} dot={false}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
       </div>
     </div>
   );
@@ -179,14 +130,49 @@ function buildCombinedTimeline(
   });
 }
 
-// 총 발표 시간을 20/60/20 비율로 서론·본론·결론 분할
-// 백엔드가 실제 구간 정보를 반환하면 그 값을 그대로 prop으로 전달
-function buildDefaultSections(totalSec: number): PresentationSection[] {
-  return [
-    { label: '서론', start: 0,              end: totalSec * 0.2 },
-    { label: '본론', start: totalSec * 0.2, end: totalSec * 0.8 },
-    { label: '결론', start: totalSec * 0.8, end: totalSec },
-  ];
+// 타임라인 이벤트 기반으로 서론·본론·결론 구간 추출
+function buildSectionsFromTimeline(
+  timeline: { time: string; event: string; type: string }[],
+): PresentationSection[] {
+  const toSec = (t: string) => {
+    const [m, s] = t.split(':').map(Number);
+    return m * 60 + s;
+  };
+  const endEvent = timeline.find(e => e.type === 'end');
+  const totalSec = endEvent ? toSec(endEvent.time) : 0;
+
+  const contents = timeline.filter(e => e.type === 'content');
+  let bodyStart: number | null = null;
+  let conclusionStart: number | null = null;
+
+  for (const e of contents) {
+    const sec = toSec(e.time);
+    if (bodyStart === null && e.event.includes('본론')) bodyStart = sec;
+    if (conclusionStart === null && (e.event.includes('결론') || e.event.includes('마무리'))) conclusionStart = sec;
+  }
+
+  if (bodyStart === null && conclusionStart === null) {
+    return [
+      { label: '서론', start: 0,              end: totalSec * 0.2 },
+      { label: '본론', start: totalSec * 0.2, end: totalSec * 0.8 },
+      { label: '결론', start: totalSec * 0.8, end: totalSec },
+    ];
+  }
+
+  const sections: PresentationSection[] = [];
+  if (bodyStart !== null) {
+    sections.push({ label: '서론', start: 0, end: bodyStart });
+    if (conclusionStart !== null) {
+      sections.push({ label: '본론', start: bodyStart, end: conclusionStart });
+      sections.push({ label: '결론', start: conclusionStart, end: totalSec });
+    } else {
+      sections.push({ label: '본론', start: bodyStart, end: totalSec });
+    }
+  } else if (conclusionStart !== null) {
+    sections.push({ label: '서론/본론', start: 0, end: conclusionStart });
+    sections.push({ label: '결론', start: conclusionStart, end: totalSec });
+  }
+  return sections;
 }
 
 // 피치: 보라, 발화속도: 주황 — 명확히 구분되는 색
@@ -256,26 +242,33 @@ function PresentationChart({
           <input type="radio" name="graph-select" checked={showPitch}
             onChange={() => setActiveGraph('pitch')}
             className="accent-purple-600" />
-          피치 변화폭 (최고 - 최저) (Hz)
+          피치 변화 (Hz)
           <span className="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-mono text-xs">
             평균 {pitchMean.toFixed(0)}Hz
           </span>
         </label>
       </div>
 
-      <ResponsiveContainer width="100%" height={210}>
-        <ComposedChart data={data} margin={{ top: 14, right: 8, bottom: 0, left: 0 }}>
-          {/* 서론·본론·결론 구간 레이블 */}
+      {/* 섹션 레이블 바 — 차트 위에 분리하여 선과 겹치지 않게 */}
+      {typeof domainMax === 'number' && domainMax > 0 && (
+        <div className="relative flex h-5" style={{ marginLeft: 48, marginRight: 8 }}>
           {sections.map(sec => (
-            <ReferenceArea
+            <div
               key={sec.label}
-              yAxisId="pitch"
-              x1={sec.start} x2={sec.end}
-              fill="none"
-              label={{ value: sec.label, position: 'insideTop', fontSize: 12,
-                fill: '#94a3b8', dy: 2, fontWeight: 600 }}
-            />
+              className="absolute flex items-center justify-center text-xs font-semibold text-slate-400"
+              style={{
+                left: `${(sec.start / domainMax) * 100}%`,
+                width: `${((sec.end - sec.start) / domainMax) * 100}%`,
+              }}
+            >
+              {sec.label}
+            </div>
           ))}
+        </div>
+      )}
+
+      <ResponsiveContainer width="100%" height={210}>
+        <ComposedChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
           {/* 구간 경계 세로선 */}
           {sections.slice(0, -1).map(sec => (
             <ReferenceLine
@@ -305,13 +298,15 @@ function PresentationChart({
             type="number"
             scale="linear"
             domain={[0, domainMax]}
+            ticks={typeof domainMax === 'number'
+              ? Array.from({ length: Math.floor(domainMax / 30) + 1 }, (_, i) => i * 30)
+              : undefined}
             tickFormatter={(v: number) => {
               const m = Math.floor(v / 60);
               const s = String(Math.floor(v % 60)).padStart(2, '0');
               return `${m}:${s}`;
             }}
             tick={{ fontSize: 12, fill: '#94a3b8' }}
-            interval={19}
             axisLine={false}
             tickLine={false}
           />
@@ -365,31 +360,94 @@ function PresentationChart({
 
 // ── 연습 체크리스트 ───────────────────────────────────────────────────────────
 
-// 분석 결과로 개선 필요 항목을 생성 (백엔드 연동 시 LLM 응답을 이 타입으로 매핑)
-// 표시 항목: 발화속도 · 피치 변화폭 · 정면 응시 비율
-function generateMockChecklist(ar: {
-  speechRate: number; eyeContact: number; pitchVariation: number;
+export function generateMockChecklist(ar: {
+  speechRate: number;
+  eyeContact: number;
+  pitchVariation: number;
+  lateSpeedRatio?: number;
+  negativePoseDurationRatio?: number;
+  durationSec?: number;
+  timeLimitSec?: number;
 }): ChecklistItem[] {
   const items: ChecklistItem[] = [];
+
+  const fmtDiff = (s: number) => {
+    const m = Math.floor(s / 60), sec = Math.round(s % 60);
+    return m > 0 ? `${m}분 ${sec}초` : `${sec}초`;
+  };
 
   if (ar.speechRate < 270 || ar.speechRate > 330)
     items.push({ id: 'speechRate', category: 'voice', metric_key: 'speechRate',
       condition: 'in_range', target_min: 270, target_max: 330, is_completed: false,
-      label: ar.speechRate < 270
-        ? `발화 속도 높이기 · 현재 ${ar.speechRate}음절/분 → 목표 270–330`
-        : `발화 속도 줄이기 · 현재 ${ar.speechRate}음절/분 → 목표 270–330` });
+      label: ar.speechRate > 330 ? `발화 속도가 ${ar.speechRate} CPM으로 빠른 편이에요.` : `발화 속도가 ${ar.speechRate} CPM으로 느린 편이에요.`,
+      fact: ar.speechRate > 330
+        ? `발화 속도가 ${ar.speechRate} CPM으로 적정 범위(270–330 CPM)보다 빠르게 측정됐어요.`
+        : `발화 속도가 ${ar.speechRate} CPM으로 적정 범위(270–330 CPM)보다 느리게 측정됐어요.`,
+      tip: ar.speechRate > 330
+        ? `문장 사이에 짧게 멈추는 연습을 하면 청중이 내용을 더 잘 이해할 수 있어요.`
+        : `핵심 내용을 읽어보는 연습을 통해 자연스럽게 속도를 높이면 발표에 집중력이 생겨요.` });
 
   if (ar.pitchVariation < 70 || ar.pitchVariation > 90)
     items.push({ id: 'pitchVariation', category: 'voice', metric_key: 'pitchVariation',
       condition: 'in_range', target_min: 70, target_max: 90, is_completed: false,
-      label: ar.pitchVariation < 70
-        ? `피치 변화폭 늘리기 · 현재 ${ar.pitchVariation}Hz → 목표 70–90Hz`
-        : `피치 변화폭 줄이기 · 현재 ${ar.pitchVariation}Hz → 목표 70–90Hz` });
+      label: ar.pitchVariation < 70 ? `피치 변화폭이 ${ar.pitchVariation} Hz로 단조로운 편이에요.` : `피치 변화폭이 ${ar.pitchVariation} Hz로 변화가 과한 편이에요.`,
+      fact: ar.pitchVariation < 70
+        ? `피치 변화폭이 ${ar.pitchVariation} Hz로 목소리가 전반적으로 단조롭게 유지됐어요.`
+        : `피치 변화폭이 ${ar.pitchVariation} Hz로 목소리 변화가 다소 불규칙했어요.`,
+      tip: ar.pitchVariation < 70
+        ? `중요한 단어에서 의식적으로 목소리를 높이면 청중의 집중도를 끌어올릴 수 있어요.`
+        : `주요 포인트 외에는 일정한 톤을 유지하면 더 안정적이고 신뢰감 있게 들려요.` });
+
+  const lateRatio = ar.lateSpeedRatio ?? 1.0;
+  if (Math.abs(lateRatio - 1.0) > 0.05) {
+    const diffPct = Math.round(Math.abs(lateRatio - 1.0) * 100);
+    items.push({ id: 'lateSpeed', category: 'voice', metric_key: 'lateSpeedRatio',
+      condition: 'in_range', target_min: 0.95, target_max: 1.05, is_completed: false,
+      label: lateRatio > 1.0 ? `후반부 발화 속도가 전체 평균보다 ${diffPct}% 빨랐어요.` : `후반부 발화 속도가 전체 평균보다 ${diffPct}% 느려졌어요.`,
+      fact: lateRatio > 1.0
+        ? `발표 후반부 발화 속도가 전체 평균 대비 ${diffPct}% 빠르게 측정됐어요.`
+        : `발표 후반부 발화 속도가 전체 평균 대비 ${diffPct}% 느리게 측정됐어요.`,
+      tip: lateRatio > 1.0
+        ? `발표 마지막 부분에서 의식적으로 천천히 말하면 마무리가 더 깔끔하게 전달돼요.`
+        : `후반부에 핵심 내용을 짧게 요약하는 연습을 하면 긴장감 없이 속도를 유지할 수 있어요.` });
+  }
+
+  const poseRatio = ar.negativePoseDurationRatio ?? 0;
+  if (poseRatio >= 0.10)
+    items.push({ id: 'posture', category: 'posture', metric_key: 'negativePoseDurationRatio',
+      condition: 'lte', target_max: 0.10, is_completed: false,
+      label: poseRatio > 0.25 ? `발표 시간의 ${Math.round(poseRatio * 100)}% 동안 자세가 자주 흐트러졌어요.` : `발표 시간의 ${Math.round(poseRatio * 100)}% 동안 자세가 흐트러졌어요.`,
+      fact: poseRatio > 0.25
+        ? `발표 시간의 ${Math.round(poseRatio * 100)}% 동안 몸 기울이기·만지기 등 부정적인 자세가 감지됐어요.`
+        : `발표 시간의 ${Math.round(poseRatio * 100)}% 동안 자세 불안정이 측정됐어요.`,
+      tip: poseRatio > 0.25
+        ? `발표 전 어깨를 펴고 발 너비를 어깨 폭으로 벌려 서는 자세를 습관화하면 자연스럽게 안정돼요.`
+        : `녹화 영상을 보며 어느 순간 자세가 무너지는지 확인하고 그 구간을 집중적으로 연습해보세요.` });
 
   if (ar.eyeContact < 70)
     items.push({ id: 'eyeContact', category: 'posture', metric_key: 'eyeContact',
       condition: 'gte', target_min: 70, is_completed: false,
-      label: `정면 응시 비율 높이기 · 현재 ${ar.eyeContact}% → 목표 70% 이상` });
+      label: ar.eyeContact < 50 ? `정면 응시 비율이 ${ar.eyeContact}%로 낮아요.` : `정면 응시 비율이 ${ar.eyeContact}%로 조금 부족해요.`,
+      fact: ar.eyeContact < 50
+        ? `정면 응시 비율이 ${ar.eyeContact}%로 청중보다 화면이나 메모를 바라보는 시간이 훨씬 많았어요.`
+        : `정면 응시 비율이 ${ar.eyeContact}%로 시선이 화면 쪽으로 자주 향했어요.`,
+      tip: ar.eyeContact < 50
+        ? `카메라 위에 작은 메모지를 붙여두고 연습하면 자연스럽게 정면을 바라보는 습관이 생겨요.`
+        : `슬라이드를 읽는 대신 키워드만 적어두면 청중을 바라보며 말하는 시간이 늘어나요.` });
+
+  if (ar.durationSec !== undefined && ar.timeLimitSec && ar.timeLimitSec > 0) {
+    const diff = ar.durationSec - ar.timeLimitSec;
+    if (Math.abs(diff) > ar.timeLimitSec * 0.10)
+      items.push({ id: 'duration', category: 'voice', metric_key: 'durationSec',
+        condition: 'in_range', target_min: ar.timeLimitSec * 0.9, target_max: ar.timeLimitSec * 1.1, is_completed: false,
+        label: diff > 0 ? `제한시간보다 ${fmtDiff(diff)} 초과했어요.` : `제한시간보다 ${fmtDiff(-diff)} 일찍 끝났어요.`,
+        fact: diff > 0
+          ? `발표 시간이 제한시간보다 ${fmtDiff(diff)} 초과됐어요.`
+          : `발표 시간이 제한시간보다 ${fmtDiff(-diff)} 일찍 끝났어요.`,
+        tip: diff > 0
+          ? `각 섹션에 시간을 배분하고 미리 타이머를 켜두고 연습하면 자연스럽게 시간 안에 마칠 수 있어요.`
+          : `핵심 포인트마다 예시나 부연 설명을 한 문장씩 추가하면 내용이 더 풍부해지고 시간도 채워져요.` });
+  }
 
   return items;
 }
@@ -426,27 +484,87 @@ function ChecklistPanel({
           const cat = CATEGORY_STYLE[item.category];
           return (
             <label key={item.id}
-              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+              className={`flex flex-col gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${
                 item.is_completed
                   ? 'bg-green-50 border-green-200'
                   : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
               }`}>
-              <input type="checkbox" checked={item.is_completed}
-                onChange={() => onToggle(item.id)}
-                className="mt-0.5 accent-green-600 shrink-0" />
-              <div className="flex-1 min-w-0 space-y-1">
-                <p className={`text-sm leading-snug ${
-                  item.is_completed ? 'text-green-800 line-through decoration-green-400' : 'text-slate-800'
-                }`}>
-                  {item.label}
-                </p>
-                <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${cat.cls}`}>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={item.is_completed}
+                  onChange={() => onToggle(item.id)}
+                  className="accent-green-600 shrink-0" />
+                <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${cat.cls}`}>
                   {cat.label}
                 </span>
+                <p className={`text-sm leading-snug flex-1 min-w-0 ${
+                  item.is_completed ? 'text-green-800 line-through decoration-green-400' : 'text-slate-800'
+                }`}>
+                  {item.fact ?? item.label}
+                </p>
               </div>
+              {item.tip && !item.is_completed && (
+                <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
+                  <span className="text-sm flex-shrink-0">💡</span>
+                  <p className="text-xs text-amber-800 leading-relaxed">{item.tip}</p>
+                </div>
+              )}
             </label>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ── 시선 비율 3x3 그리드 ──────────────────────────────────────────────────────
+function GazeGrid({ grid }: { grid: number[][] }) {
+  const maxVal = Math.max(...grid.flat());
+  return (
+    <div className="w-full h-full bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col">
+      <p className="text-sm font-semibold text-slate-600 mb-3 tracking-wide">시선 분포</p>
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex items-center gap-1.5">
+          {/* 좌 레이블 */}
+          <span className="text-sm font-semibold text-slate-400 w-5 text-center">좌</span>
+          <div className="flex flex-col gap-1">
+            {/* 상 레이블 */}
+            <span className="text-sm font-semibold text-slate-400 text-center">상</span>
+            <div className="grid grid-cols-3 gap-1">
+              {grid.map((row, ri) =>
+                row.map((val, ci) => {
+                  const isCenter = ri === 1 && ci === 1;
+                  const isMax = maxVal > 0 && val === maxVal;
+                  const intensity = maxVal > 0 ? val / maxVal : 0;
+                  const bgOpacity = 0.05 + intensity * 0.85;
+                  const bg = `rgba(30, 58, 138, ${bgOpacity})`;
+                  const isDark = bgOpacity > 0.45;
+                  const valueCls = isDark ? 'text-white' : (isCenter ? 'text-blue-800' : 'text-slate-600');
+                  return (
+                    <div
+                      key={`${ri}-${ci}`}
+                      className={`w-14 h-12 rounded-lg flex flex-col items-center justify-center gap-0.5 ${
+                        isCenter
+                          ? 'border-2 border-blue-400'
+                          : isMax
+                          ? 'border-2 border-blue-600'
+                          : 'border border-slate-200'
+                      }`}
+                      style={{ background: bg }}
+                    >
+                      <span className={`text-xs font-bold leading-none ${valueCls}`}>
+                        {val > 0 ? `${val.toFixed(1)}%` : '0%'}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            {/* 하 레이블 */}
+            <span className="text-sm font-semibold text-slate-400 text-center">하</span>
+          </div>
+          {/* 우 레이블 */}
+          <span className="text-sm font-semibold text-slate-400 w-5 text-center">우</span>
+        </div>
       </div>
     </div>
   );
@@ -469,6 +587,7 @@ export default function ResultsPage() {
   const [currentVideoTime, setCurrentVideoTime] = useState(0);
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
   const [expandedPoses, setExpandedPoses] = useState<Set<string>>(new Set());
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const overallRef = useRef<HTMLDivElement>(null);
@@ -512,10 +631,41 @@ export default function ResultsPage() {
     if (currentAttempt.checklist) {
       setChecklistItems(currentAttempt.checklist);
     } else {
-      const defaults = { speechRate: 300, eyeContact: 78, pitchVariation: 75 };
-      setChecklistItems(generateMockChecklist({ ...defaults, ...currentAttempt.analysisResults }));
+      const gazeM = (currentAttempt.analysisResults as any)?.gazeResult?.gaze_metrics
+        ?? gazeResult.gaze_metrics;
+      const eyeContactVal = Math.round((gazeM.grid_percent as number[][])[1][1] * 10) / 10;
+      const ar = currentAttempt.analysisResults as any ?? {};
+      const negPoseRatio = ar.negativePoseDurationRatio
+        ?? refinerResult.refined_result.details.negative_posture_analysis.negative_posture_duration_ratio;
+      const lateRatio = ar.lateSpeedRatio
+        ?? (refinerResult.refined_result.details.late_speech_rate_analysis.late_average_cpm
+            / refinerResult.refined_result.details.late_speech_rate_analysis.overall_average_cpm);
+      const durStr: string = ar.duration ?? '0:00';
+      const [dm, ds] = durStr.split(':').map(Number);
+      const durationSec = dm * 60 + (ds || 0);
+      const timeLimitSec = currentSession?.formData?.timeLimit
+        ? parseInt(currentSession.formData.timeLimit) * 60 : 0;
+      setChecklistItems(generateMockChecklist({
+        speechRate: ar.speechRate ?? 300,
+        eyeContact: eyeContactVal,
+        pitchVariation: ar.pitchVariation ?? 75,
+        lateSpeedRatio: lateRatio,
+        negativePoseDurationRatio: negPoseRatio,
+        durationSec: durationSec > 0 ? durationSec : undefined,
+        timeLimitSec: timeLimitSec > 0 ? timeLimitSec : undefined,
+      }));
     }
   }, [currentAttempt?.id]);
+
+  useEffect(() => {
+    const url = currentAttempt?.videoUrl;
+    if (!url) { setVideoDuration(null); return; }
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => setVideoDuration(video.duration);
+    video.onerror = () => setVideoDuration(null);
+    video.src = url;
+  }, [currentAttempt?.videoUrl]);
 
   if (!currentSession) return null;
   if (!currentAttempt) { navigate('/dashboard'); return null; }
@@ -524,13 +674,20 @@ export default function ResultsPage() {
   const { min_hz, max_hz } = pitchExample.pitch_metrics.summary;
   const pitchRange = Math.round((max_hz - min_hz) * 10) / 10;
 
-  // 기본값과 실제 데이터 병합
+  // 시선 데이터 (백엔드 연동 시 analysisResults.gazeResult 로 교체)
+  const gazeMetrics = (currentAttempt.analysisResults as any)?.gazeResult?.gaze_metrics
+    ?? gazeResult.gaze_metrics;
+  const gazeGrid = gazeMetrics.grid_percent as number[][];
+  const eyeContactFromGaze = Math.round((gazeMetrics.grid_percent as number[][])[1][1] * 10) / 10;
+
+  // 기본값과 실제 데이터 병합 (eyeContact는 gaze 데이터가 항상 우선)
   const ar = {
-    speechRate: 300, eyeContact: 78, duration: '8:30', postureScore: 75,
+    speechRate: 300, duration: '8:30', postureScore: 75,
     pitchVariation: pitchRange, avgIPsPerSentence: 3.5, avgWordsPerSentence: 10,
     lateSpeedRatio: 1.05, longPauseCount: 2, wordPauseCount: 12,
     fillerRate: 0.35, habitualBehaviorCount: 3,
     ...currentAttempt.analysisResults,
+    eyeContact: eyeContactFromGaze,
   };
 
   // label별 탐지 구간 목록 (토글 시 표시)
@@ -566,37 +723,46 @@ export default function ResultsPage() {
   // 백엔드 연동 시: ar.pitchTimeline / ar.speechRateTimeline 이 있으면 그걸 사용
   const pitchTimeline = pitchExample.pitch_metrics.pitch_timeline;
   const presentationData = buildCombinedTimeline(pitchTimeline, ar.speechRate);
-  const presentationSections = buildDefaultSections(
-    pitchTimeline[pitchTimeline.length - 1]?.end ?? 60,
-  );
+  const timelineData = presentationSummary.timeline as {
+    time: string; event: string; type: 'start' | 'content' | 'end'; script?: string;
+  }[];
+  const presentationSections = buildSectionsFromTimeline(timelineData);
 
   // KPI 피치 카드: pitch_example 실데이터 사용
   // 백엔드 연동 시 analysisResults.pitchRange, analysisResults.pitchSparkline 으로 교체
-  const pitchSparkData = pitchTimeline
-    .filter((_, i) => i % Math.max(1, Math.floor(pitchTimeline.length / 24)) === 0)
-    .slice(0, 24)
-    .map(p => ({ v: p.mean_hz }));
 
-  const toSpeechLevel = (rate: number): number =>
-    rate >= 270 && rate <= 330 ? 3 : rate >= 240 && rate <= 360 ? 2 : 1;
-  const toPitchLevel = (hz: number): number =>
-    hz >= 70 && hz <= 90 ? 3 : hz >= 41 ? 2 : 1;
-  const toPostureLevel = (score: number): number => score >= 70 ? 3 : score >= 50 ? 2 : 1;
-  const toEyeLevel = (pct: number): number => pct >= 70 ? 3 : pct >= 50 ? 2 : 1;
+  const toSpeechLevel    = (rate: number): number => rate >= 270 && rate <= 330 ? 3 : rate >= 240 && rate <= 360 ? 2 : 1;
+  const toPitchLevel     = (hz: number):   number => hz >= 70 && hz <= 90 ? 3 : hz >= 41 ? 2 : 1;
+  const toPostureLevel   = (ratio: number): number => ratio < 0.10 ? 3 : ratio <= 0.25 ? 2 : 1;
+  const toEyeLevel       = (pct: number):  number => pct >= 70 ? 3 : pct >= 50 ? 2 : 1;
+  const toLateSpeedLevel = (ratio: number): number => { const d = Math.abs(ratio - 1.0); return d <= 0.05 ? 3 : d <= 0.15 ? 2 : 1; };
+  const toDurationLevel  = (sec: number, limitSec: number): number => {
+    if (limitSec <= 0) return 2;
+    const r = sec / limitSec;
+    if (r > 1.0) return 1;
+    if (r >= 0.9) return 3;
+    if (r >= 0.7) return 2;
+    return 1;
+  };
+
+  const postureNegDurationRatio =
+    (currentAttempt.analysisResults as any)?.negativePoseDurationRatio
+    ?? refinerResult.refined_result.details.negative_posture_analysis.negative_posture_duration_ratio;
+  const lateSpeedRatioForRadar = (ar as any).lateSpeedRatio
+    ?? (refinerResult.refined_result.details.late_speech_rate_analysis.late_average_cpm
+        / refinerResult.refined_result.details.late_speech_rate_analysis.overall_average_cpm);
+  const timeLimitSecForRadar = currentSession.formData?.timeLimit
+    ? parseInt(currentSession.formData.timeLimit) * 60 : 0;
+  const durationSecForRadar = videoDuration ?? 0;
 
   const radarData = [
-    { metric: '발화 속도',  level: toSpeechLevel(ar.speechRate) },
-    { metric: '피치 변화폭', level: toPitchLevel(pitchRange) },
-    { metric: '자세',       level: toPostureLevel(ar.postureScore) },
-    { metric: '정면 응시',  level: toEyeLevel(ar.eyeContact) },
+    { metric: '발화 속도',    level: toSpeechLevel(ar.speechRate) },
+    { metric: '피치 변화폭',  level: toPitchLevel(pitchRange) },
+    { metric: '후반부 말속도', level: toLateSpeedLevel(lateSpeedRatioForRadar) },
+    { metric: '자세 안정성',  level: toPostureLevel(postureNegDurationRatio) },
+    { metric: '정면 응시',    level: toEyeLevel(ar.eyeContact) },
+    { metric: '발표 시간',    level: toDurationLevel(durationSecForRadar, timeLimitSecForRadar) },
   ];
-
-  const timelineData = presentationSummary.timeline as {
-    time: string;
-    event: string;
-    type: 'start' | 'content' | 'end';
-    script?: string;
-  }[];
 
   const handleTimelineClick = (timeString: string) => {
     const [minutes, seconds] = timeString.split(':').map(Number);
@@ -701,10 +867,19 @@ export default function ResultsPage() {
 
             {/* ─── 종합 섹션 ─── */}
             <div ref={overallRef} data-section="overall" className="p-5 space-y-5">
-              <h3 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-blue-900">4가지 지표 요약</h3>
 
-              <ResponsiveContainer width="100%" height={220}>
-                <RadarChart data={radarData} margin={{ top: 10, right: 24, bottom: 10, left: 24 }}>
+              {/* 종합 평가 — 가장 먼저 보여주는 핵심 피드백 */}
+              <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-slate-50 p-5 shadow-sm">
+                <h3 className="text-lg font-bold text-slate-900 mb-3">종합 평가</h3>
+                <p className="text-base text-slate-700 leading-relaxed">
+                  {presentationSummary.overall_comment}
+                </p>
+              </div>
+
+              <h3 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-blue-900">6가지 지표 요약</h3>
+
+              <ResponsiveContainer width="100%" height={260}>
+                <RadarChart data={radarData} outerRadius="68%" margin={{ top: 15, right: 40, bottom: 15, left: 40 }}>
                   <PolarGrid stroke="#e2e8f0" />
                   <PolarAngleAxis
                     dataKey="metric"
@@ -721,6 +896,14 @@ export default function ResultsPage() {
                   <RechartsTooltip content={<RadarTooltip />} />
                 </RadarChart>
               </ResponsiveContainer>
+              <div className="flex items-center justify-center gap-4 text-xs">
+                {([['#dc2626', '개선필요'], ['#ea580c', '주의'], ['#16a34a', '적정']] as const).map(([color, label]) => (
+                  <div key={label} className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
+                    <span className="text-slate-500 font-medium">{label}</span>
+                  </div>
+                ))}
+              </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <KPICard
@@ -728,32 +911,66 @@ export default function ResultsPage() {
                   value={ar.speechRate}
                   unit="음절/분"
                   status={ar.speechRate >= 270 && ar.speechRate <= 330 ? '적정' : ar.speechRate >= 240 && ar.speechRate <= 360 ? '주의' : '경고'}
-                  sparkData={generateSparkline(ar.speechRate, 24, 0.12)}
-                  gradientId="kpi-speech"
                 />
                 <KPICard
-                  label="피치 변화폭 (최고 - 최저)"
+                  label="피치 변화폭"
                   value={pitchRange}
                   unit="Hz"
                   status={pitchRange >= 70 && pitchRange <= 90 ? '적정' : pitchRange >= 41 ? '주의' : '경고'}
-                  sparkData={pitchSparkData}
-                  gradientId="kpi-pitch"
                 />
                 <KPICard
                   label="정면 응시 비율"
                   value={ar.eyeContact}
                   unit="%"
                   status={ar.eyeContact >= 70 ? '적정' : ar.eyeContact >= 50 ? '주의' : '경고'}
-                  sparkData={generateSparkline(ar.eyeContact, 24, 0.1)}
-                  gradientId="kpi-eye"
                 />
               </div>
 
-              <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                <h3 className="text-base font-bold text-slate-900 mb-2">종합 평가</h3>
-                <p className="text-sm text-slate-700 leading-relaxed">
-                  {presentationSummary.overall_comment}
-                </p>
+              {/* 발표 시간 준수 여부 */}
+              {(() => {
+                if (videoDuration === null) return null;
+                const totalSec = videoDuration;
+                const timeLimitMin = parseFloat(currentSession.formData?.timeLimit ?? '0');
+                const timeLimitSec = timeLimitMin * 60;
+                const hasLimit = timeLimitMin > 0;
+                const exceeded = hasLimit && totalSec > timeLimitSec;
+                const fmt = (s: number) =>
+                  `${Math.floor(s / 60)}분 ${String(Math.floor(s % 60)).padStart(2, '0')}초`;
+                const statusCls = !hasLimit
+                  ? 'bg-slate-100 border-slate-200'
+                  : exceeded
+                  ? 'bg-red-50 border-red-200'
+                  : 'bg-green-50 border-green-200';
+                return (
+                  <div className={`rounded-xl p-4 border ${statusCls}`}>
+                    <p className="text-sm font-semibold text-slate-600 mb-3 tracking-wide">발표 시간 준수</p>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-slate-500 w-20">제한 시간</span>
+                        <span className="font-bold text-slate-800">
+                          {hasLimit ? `${timeLimitMin}분 (${fmt(timeLimitSec)})` : '미설정'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-slate-500 w-20">실제 시간</span>
+                        <span className="font-bold text-slate-800">{fmt(totalSec)}</span>
+                      </div>
+                      {hasLimit && (
+                        <p className={`text-sm font-semibold mt-1 ${exceeded ? 'text-red-600' : 'text-green-700'}`}>
+                          {exceeded ? '제한 시간을 초과했습니다.' : '제한 시간을 준수했습니다.'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="space-y-3">
+                <h4 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-blue-900">자가 체크리스트</h4>
+                <ChecklistPanel
+                  items={checklistItems}
+                  onToggle={handleToggleChecklist}
+                />
               </div>
 
             </div>
@@ -761,7 +978,7 @@ export default function ResultsPage() {
             <div className="border-t border-slate-100 mx-5" />
 
             {/* ─── 음성 섹션 ─── */}
-            <div ref={voiceRef} data-section="voice" className="p-5 space-y-4">
+            <div ref={voiceRef} data-section="voice" className="p-5 space-y-5">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
                   <Mic className="w-5 h-5 text-purple-700" />
@@ -771,7 +988,7 @@ export default function ResultsPage() {
 
               {/* 발표 전체 그래프 (피치 + 발화속도) */}
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                <p className="text-sm font-semibold text-slate-600 mb-3 uppercase tracking-wide">발표 전체 그래프</p>
+                <p className="text-sm font-semibold text-slate-600 mb-3 tracking-wide">발표 전체 그래프</p>
                 <PresentationChart
                   data={presentationData}
                   sections={presentationSections}
@@ -784,7 +1001,7 @@ export default function ResultsPage() {
               {/* 발화 속도 + 피치 변화폭 (나란히) */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                  <p className="text-sm font-semibold text-slate-600 mb-3 uppercase tracking-wide">발화 속도</p>
+                  <p className="text-sm font-semibold text-slate-600 mb-3 tracking-wide">발화 속도</p>
                   <RangeGauge
                     value={ar.speechRate}
                     optimalMin={270} optimalMax={330}
@@ -793,7 +1010,7 @@ export default function ResultsPage() {
                   />
                 </div>
                 <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                  <p className="text-sm font-semibold text-slate-600 mb-3 uppercase tracking-wide">피치 변화폭</p>
+                  <p className="text-sm font-semibold text-slate-600 mb-3 tracking-wide">피치 변화폭</p>
                   <RangeGauge
                     value={ar.pitchVariation}
                     optimalMin={70} optimalMax={90}
@@ -803,7 +1020,58 @@ export default function ResultsPage() {
                 </div>
               </div>
 
-              {/* 휴지 기간 Top (3초 이상) */}
+              {/* 후반부 발화속도 분석 */}
+              {(() => {
+                const lateData = (currentAttempt.analysisResults as any)?.refinerResult
+                  ?.refined_result?.details?.late_speech_rate_analysis
+                  ?? refinerResult.refined_result.details.late_speech_rate_analysis;
+
+                const { late_section_ratio, late_section_start_sec, late_average_cpm, overall_average_cpm, is_faster_than_overall } = lateData;
+                const changeRatio = (overall_average_cpm - late_average_cpm) / overall_average_cpm * 100;
+                const isSignificant = is_faster_than_overall && Math.abs(changeRatio) >= 10;
+                const lateRatioPct = Math.round(late_section_ratio * 100);
+
+                const fmtTime = (sec: number) => {
+                  const m = Math.floor(sec / 60);
+                  const s = String(Math.floor(sec % 60)).padStart(2, '0');
+                  return `${m}:${s}`;
+                };
+
+                return (
+                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                    <p className="text-sm font-semibold text-slate-600 mb-3 tracking-wide">
+                      후반 {lateRatioPct}% 구간 발화속도
+                    </p>
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500">전체 평균</span>
+                        <span className="font-bold text-slate-800">{overall_average_cpm.toFixed(1)} CPM</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500">후반부 평균 <span className="text-slate-400 font-normal">({fmtTime(late_section_start_sec)} ~ )</span></span>
+                        <span className="font-bold text-slate-800">{late_average_cpm.toFixed(1)} CPM</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500">전체 대비 변화율</span>
+                        <span className={`font-bold ${is_faster_than_overall ? 'text-red-600' : 'text-green-700'}`}>
+                          {is_faster_than_overall ? '+' : ''}{Math.abs(changeRatio).toFixed(1)}%{is_faster_than_overall ? ' 빠름' : ' 느림'}
+                        </span>
+                      </div>
+                      <div className={`mt-1 text-sm font-semibold rounded-lg px-3 py-2 ${
+                        isSignificant
+                          ? 'bg-red-50 text-red-700 border border-red-200'
+                          : 'bg-green-50 text-green-700 border border-green-200'
+                      }`}>
+                        {isSignificant
+                          ? `후반부에 발화속도가 평균 대비 ${Math.abs(changeRatio).toFixed(1)}% 빨라졌습니다. 속도를 일정하게 유지해보세요.`
+                          : '후반부 발화속도가 전체 평균과 비슷하게 유지되었습니다.'}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 휴지 기간 (3초 이상) */}
               {(() => {
                 const PAUSE_THRESHOLD = refinerData.refined_result.details.pause_analysis.sentence_pause_threshold_sec;
                 const allPauses = refinerData.refined_result.details.pause_analysis.long_sentence_pause_top3;
@@ -821,7 +1089,7 @@ export default function ResultsPage() {
 
                 return (
                   <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                    <p className="text-sm font-semibold text-slate-600 mb-3 uppercase tracking-wide">
+                    <p className="text-sm font-semibold text-slate-600 mb-3 tracking-wide">
                       휴지 기간 ({PAUSE_THRESHOLD}초 이상)
                     </p>
                     <div className="space-y-3">
@@ -891,23 +1159,16 @@ export default function ResultsPage() {
                 <h3 className="text-base font-bold text-slate-900">자세 및 응시</h3>
               </div>
 
-              {/* 정면 응시 + 자세 */}
+              {/* 시선 분포 + 자세 */}
               <div className="flex gap-3">
-                {/* 왼쪽: 정면 응시 비율 (콘텐츠 너비만) */}
-                <div className="flex-none bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col">
-                  <p className="text-sm font-semibold text-slate-600 mb-3 uppercase tracking-wide">정면 응시 비율</p>
-                  <div className="flex-1 flex items-center justify-center">
-                    <CircleProgress
-                      value={ar.eyeContact}
-                      unit="%"
-                      color={ar.eyeContact >= 70 ? '#16a34a' : '#dc2626'}
-                    />
-                  </div>
+                {/* 왼쪽: 시선 분포 3×3 */}
+                <div className="w-[40%] flex-none self-stretch">
+                  <GazeGrid grid={gazeGrid} />
                 </div>
 
-                {/* 오른쪽: 자세 Top 3 (나머지 전체) */}
+                {/* 오른쪽: 자세 Top 3 */}
                 <div className="flex-1 bg-slate-50 rounded-xl p-4 border border-slate-200">
-                  <p className="text-sm font-semibold text-slate-600 mb-3 uppercase tracking-wide">자세 Top 3</p>
+                  <p className="text-sm font-semibold text-slate-600 mb-3 tracking-wide">문제 자세 Top 3</p>
                   <div className="space-y-2">
                     {postureTop3.map(({ rank, label, count, percent }) => {
                       const rankCls = rank === 1
@@ -927,7 +1188,6 @@ export default function ResultsPage() {
                       });
                       return (
                         <div key={rank} className="flex gap-2.5">
-                          <div className="w-11 h-11 rounded-xl border-2 border-dashed border-slate-300 bg-white flex-shrink-0 mt-0.5" />
                           <div className="flex-1 min-w-0">
                             <div
                               className="flex items-center justify-between mb-1 cursor-pointer"
@@ -980,15 +1240,6 @@ export default function ResultsPage() {
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-green-500">자가 체크리스트</h4>
-                </div>
-                <ChecklistPanel
-                  items={checklistItems}
-                  onToggle={handleToggleChecklist}
-                />
-              </div>
             </div>
 
           </div>

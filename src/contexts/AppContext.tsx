@@ -11,6 +11,8 @@ export interface IssueSegment {
 export interface ChecklistItem {
   id: string;
   label: string;          // 사용자에게 보여줄 자연어 설명
+  fact?: string;          // 발표 결과 사실 요약
+  tip?: string;           // 개선 방법 제안
   category: 'voice' | 'posture';
   metric_key: string | null;               // 자동 달성 판정에 사용할 지표 키
   condition?: 'in_range' | 'gte' | 'lte'; // 판정 조건
