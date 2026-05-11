@@ -523,10 +523,10 @@ export default function ComparisonPage() {
         {/* 왼쪽: 영상 비교 */}
         <div className="w-1/2 flex flex-col min-w-0">
           <div className="bg-white rounded-xl shadow-lg p-4 border border-slate-200 flex flex-col flex-1 gap-3 overflow-hidden">
-            <h2 className="text-base font-bold text-slate-900 flex-shrink-0">영상 비교</h2>
+            <h2 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-blue-900 flex-shrink-0">영상 비교</h2>
             <div className="flex flex-col flex-1 gap-3 min-h-0">
               <div className="flex-1 flex flex-col min-h-0">
-                <p className="text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide flex-shrink-0">1회차</p>
+                <p className="text-sm font-bold text-slate-700 mb-2 flex-shrink-0">1회차</p>
                 {attempt1.videoUrl ? (
                   <div className="flex-1 min-h-0 overflow-hidden rounded-xl">
                     <VideoPlayer videoUrl={attempt1.videoUrl} />
@@ -538,7 +538,7 @@ export default function ComparisonPage() {
                 )}
               </div>
               <div className="flex-1 flex flex-col min-h-0">
-                <p className="text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide flex-shrink-0">2회차</p>
+                <p className="text-sm font-bold text-slate-700 mb-2 flex-shrink-0">2회차</p>
                 {attempt2.videoUrl ? (
                   <div className="flex-1 min-h-0 overflow-hidden rounded-xl">
                     <VideoPlayer videoUrl={attempt2.videoUrl} />
@@ -559,7 +559,7 @@ export default function ComparisonPage() {
 
             {/* 종합 의견 */}
             <div className="p-5">
-              <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">종합 의견</h3>
+              <h3 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-3">종합 의견</h3>
               <p className="text-sm text-slate-700 leading-relaxed">{overallOpinion}</p>
             </div>
 
@@ -567,8 +567,8 @@ export default function ComparisonPage() {
 
             {/* 종합 비교 차트 */}
             <div className="p-5">
-              <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-1">종합 비교 차트</h3>
-              <p className="text-xs text-slate-500 mb-3">
+              <h3 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-1">종합 비교 차트</h3>
+              <p className="text-sm text-slate-500 mb-3">
                 각 항목을 개선필요 · 주의 · 적정 3단계로 평가합니다.
               </p>
               <ResponsiveContainer width="100%" height={260}>
@@ -591,8 +591,8 @@ export default function ComparisonPage() {
 
             {/* 피드백 수용 현황 */}
             <div className="p-5">
-              <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-1">피드백 수용 현황</h3>
-              <p className="text-xs text-slate-500 mb-4">1회차 결과 기반으로 2회차에서 각 항목이 얼마나 개선됐는지 추적합니다.</p>
+              <h3 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-1">피드백 수용 현황</h3>
+              <p className="text-sm text-slate-500 mb-4">1회차 결과 기반으로 2회차에서 각 항목이 얼마나 개선됐는지 추적합니다.</p>
               <div className="grid grid-cols-2 gap-2.5">
                 {feedbackItems.map((item, idx) => {
                   const statusColors: Record<ImprovementStatus, string> = {
@@ -622,7 +622,7 @@ export default function ComparisonPage() {
                       </div>
                       <StatusBadge status={item.result.status} />
                       <p className="text-xs text-slate-400 mt-1">{item.result.label}</p>
-                      <p className="text-xs text-slate-300 mt-0.5">{item.note}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{item.note}</p>
                     </div>
                   );
                 })}
@@ -633,7 +633,7 @@ export default function ComparisonPage() {
 
             {/* KPI 비교 */}
             <div className="p-5">
-              <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-4">KPI 비교</h3>
+              <h3 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-4">KPI 비교</h3>
               <div className="grid grid-cols-3 gap-3">
                 <KPICompareCard
                   label="발화 속도" unit="음절/분" gradKey="speech"
@@ -660,8 +660,8 @@ export default function ComparisonPage() {
 
             {/* 자가 체크리스트 비교 */}
             <div className="p-5">
-              <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-1">자가 체크리스트 비교</h3>
-              <p className="text-xs text-slate-500 mb-4">1회차에서 설정한 개선 목표가 2회차에서 실제로 달성됐는지 확인합니다.</p>
+              <h3 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-green-500 mb-1">자가 체크리스트 비교</h3>
+              <p className="text-sm text-slate-500 mb-4">1회차에서 설정한 개선 목표가 2회차에서 실제로 달성됐는지 확인합니다.</p>
               {checklistItems.length === 0 ? (
                 <div className="text-center py-6 text-sm text-slate-400">1회차에서 모든 지표가 적정 범위였습니다 🎉</div>
               ) : (
@@ -675,13 +675,13 @@ export default function ComparisonPage() {
                           <p className="text-sm text-slate-800 leading-snug flex-1">{item.label}</p>
                           <div className="flex items-center gap-3 flex-shrink-0">
                             <div className="flex flex-col items-center gap-0.5">
-                              <span className="text-[10px] text-slate-400">자기 체크</span>
+                              <span className="text-xs text-slate-400">자기 체크</span>
                               <span className={`text-sm font-bold ${selfChecked ? 'text-green-600' : 'text-slate-300'}`}>
                                 {selfChecked ? '✓' : '—'}
                               </span>
                             </div>
                             <div className="flex flex-col items-center gap-0.5">
-                              <span className="text-[10px] text-slate-400">실제 달성</span>
+                              <span className="text-xs text-slate-400">실제 달성</span>
                               <span className={`text-sm font-bold ${achieved ? 'text-green-600' : 'text-red-500'}`}>
                                 {achieved ? '✓' : '✗'}
                               </span>
@@ -698,7 +698,7 @@ export default function ComparisonPage() {
                           </span>
                         </div>
                         {selfChecked !== achieved && (
-                          <p className="text-[10px] mt-1.5 font-semibold text-orange-600">
+                          <p className="text-xs mt-1.5 font-semibold text-orange-600">
                             {selfChecked && !achieved
                               ? '⚠ 스스로 개선했다고 체크했지만 수치상 목표 미달입니다.'
                               : '✦ 체크하지 않았지만 실제로 목표를 달성했습니다!'}
