@@ -79,27 +79,6 @@ function RangeGauge({ value, optimalMin, optimalMax, unit, maxDisplay, minLabel 
   );
 }
 
-// ── 횟수 배지 ────────────────────────────────────────────────────────────────
-function CountBadge({ count, label, thresholds, decimals = 0 }: {
-  count: number; label: string; thresholds: [number, number]; decimals?: number;
-}) {
-  const cls = count <= thresholds[0]
-    ? 'bg-green-100 text-green-800 border-green-300'
-    : count <= thresholds[1]
-    ? 'bg-orange-100 text-orange-800 border-orange-300'
-    : 'bg-red-100 text-red-800 border-red-300';
-  const display = decimals > 0 ? count.toFixed(decimals) : String(count);
-  const textSize = display.length > 3 ? 'text-lg' : 'text-2xl';
-  return (
-    <div className="flex flex-col items-center gap-1.5">
-      <div className={`w-16 h-16 rounded-2xl border-2 flex items-center justify-center font-bold ${textSize} ${cls}`}>
-        {display}
-      </div>
-      <span className="text-xs font-semibold text-slate-500 text-center leading-tight">{label}</span>
-    </div>
-  );
-}
-
 // ── KPI 카드 ──────────────────────────────────────────────────────────────────
 type KPIStatus = '적정' | '주의' | '경고';
 
@@ -277,7 +256,7 @@ function PresentationChart({
           <input type="radio" name="graph-select" checked={showPitch}
             onChange={() => setActiveGraph('pitch')}
             className="accent-purple-600" />
-          피치 (Hz)
+          피치 변화폭 (최고 - 최저) (Hz)
           <span className="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-mono text-xs">
             평균 {pitchMean.toFixed(0)}Hz
           </span>
@@ -438,6 +417,9 @@ function ChecklistPanel({
     <div className="space-y-3">
       <p className="text-xs text-slate-500">
         스스로 연습하여 개선했다고 생각하는 항목을 체크해주세요
+      </p>
+      <p className="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 leading-relaxed">
+        2회차 발표 후 비교 페이지에서 자기 체크 여부와 실제 수치 달성 여부를 함께 확인할 수 있습니다.
       </p>
       <div className="space-y-2">
         {items.map(item => {
