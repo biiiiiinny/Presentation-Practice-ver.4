@@ -120,7 +120,7 @@ const analyzeDuration = (sec1: number, sec2: number, limitSec: number): Improvem
 const toSpeechLevel = (rate: number): number =>
   rate >= 270 && rate <= 330 ? 3 : rate >= 240 && rate <= 360 ? 2 : 1;
 const toPitchLevel = (hz: number): number =>
-  hz >= 15 && hz <= 35 ? 3 : hz >= 8 && hz <= 50 ? 2 : 1;
+  hz >= 70 && hz <= 90 ? 3 : hz >= 41 ? 2 : 1;
 const toPostureLevel = (score: number): number => score >= 70 ? 3 : score >= 50 ? 2 : 1;
 const toEyeLevel = (pct: number): number => pct >= 70 ? 3 : pct >= 50 ? 2 : 1;
 
@@ -136,12 +136,12 @@ function generateMockChecklist(ar: {
       label: ar.speechRate < 270
         ? `발화 속도 높이기 · 현재 ${ar.speechRate}음절/분 → 목표 270–330`
         : `발화 속도 줄이기 · 현재 ${ar.speechRate}음절/분 → 목표 270–330` });
-  if (ar.pitchVariation < 15 || ar.pitchVariation > 35)
+  if (ar.pitchVariation < 70 || ar.pitchVariation > 90)
     items.push({ id: 'pitchVariation', category: 'voice', metric_key: 'pitchVariation',
-      condition: 'in_range', target_min: 15, target_max: 35, is_completed: false,
-      label: ar.pitchVariation < 15
-        ? `피치 변화폭 늘리기 · 현재 ${ar.pitchVariation}Hz → 목표 15–35Hz`
-        : `피치 변화폭 줄이기 · 현재 ${ar.pitchVariation}Hz → 목표 15–35Hz` });
+      condition: 'in_range', target_min: 70, target_max: 90, is_completed: false,
+      label: ar.pitchVariation < 70
+        ? `피치 변화폭 늘리기 · 현재 ${ar.pitchVariation}Hz → 목표 70–90Hz`
+        : `피치 변화폭 줄이기 · 현재 ${ar.pitchVariation}Hz → 목표 70–90Hz` });
   if (ar.eyeContact < 70)
     items.push({ id: 'eyeContact', category: 'posture', metric_key: 'eyeContact',
       condition: 'gte', target_min: 70, is_completed: false,
@@ -215,7 +215,7 @@ const analyzeLateSpeed = (r1: number, r2: number): ImprovementResult => {
 
 // ── 상태 배지 컴포넌트 ─────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: ImprovementStatus }) {
-  const base = 'flex items-center gap-1.5 font-semibold text-sm';
+  const base = 'flex items-center gap-1.5 font-semibold text-base';
   if (status === 'improved') return (
     <div className={`${base} text-green-700`}>
       <CheckCircle className="w-4 h-4" />
@@ -274,30 +274,30 @@ function KPICompareCard({
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col p-3 gap-1.5 min-w-0">
       {/* 헤더 행: 라벨 + 트렌드 배지 */}
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-slate-500 truncate">{label}</p>
+        <p className="text-sm font-semibold text-slate-500 truncate">{label}</p>
         {trend === 'up' ? (
-          <span className="text-xs font-bold text-green-600 flex-shrink-0">▲</span>
+          <span className="text-sm font-bold text-green-600 flex-shrink-0">▲</span>
         ) : trend === 'down' ? (
-          <span className="text-xs font-bold text-red-600 flex-shrink-0">▼</span>
+          <span className="text-sm font-bold text-red-600 flex-shrink-0">▼</span>
         ) : (
-          <span className="text-xs font-bold text-slate-400 flex-shrink-0">—</span>
+          <span className="text-sm font-bold text-slate-400 flex-shrink-0">—</span>
         )}
       </div>
       {/* 수치 행 */}
       <div className="flex flex-col gap-0.5">
         <div className="flex items-center gap-1">
           <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: C1 }} />
-          <span className="text-xs text-slate-400">1회차</span>
-          <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ml-auto ${b1.cls}`}>{b1.label}</span>
-          <span className="text-lg font-bold text-slate-800 leading-none">{val1}</span>
-          <span className="text-xs text-slate-400">{unit}</span>
+          <span className="text-sm text-slate-400">1회차</span>
+          <span className={`text-sm font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ml-auto ${b1.cls}`}>{b1.label}</span>
+          <span className="text-xl font-bold text-slate-800 leading-none">{val1}</span>
+          <span className="text-sm text-slate-400">{unit}</span>
         </div>
         <div className="flex items-center gap-1">
           <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: C2 }} />
-          <span className="text-xs text-slate-400">2회차</span>
-          <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ml-auto ${b2.cls}`}>{b2.label}</span>
-          <span className="text-lg font-bold text-slate-800 leading-none">{val2}</span>
-          <span className="text-xs text-slate-400">{unit}</span>
+          <span className="text-sm text-slate-400">2회차</span>
+          <span className={`text-sm font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ml-auto ${b2.cls}`}>{b2.label}</span>
+          <span className="text-xl font-bold text-slate-800 leading-none">{val2}</span>
+          <span className="text-sm text-slate-400">{unit}</span>
         </div>
       </div>
       {/* 스파크라인 */}
@@ -329,7 +329,7 @@ const RADAR_LEVEL_LABEL: Record<number, string> = { 1: '개선필요', 2: '주�
 const ComparisonRadarTooltip = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg text-xs">
+    <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg text-sm">
       <p className="font-semibold text-slate-800 mb-1">{payload[0]?.payload?.metric}</p>
       {payload.map((p: any) => (
         <p key={p.dataKey} style={{ color: p.color }} className="mt-0.5">
@@ -512,7 +512,7 @@ export default function ComparisonPage() {
           </button>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">1회차 vs 2회차 비교</h1>
-            <p className="text-sm text-slate-600 mt-0.5">{currentSession.title}</p>
+            <p className="text-base text-slate-600 mt-0.5">{currentSession.title}</p>
           </div>
         </div>
       </div>
@@ -523,29 +523,29 @@ export default function ComparisonPage() {
         {/* 왼쪽: 영상 비교 */}
         <div className="w-1/2 flex flex-col min-w-0">
           <div className="bg-white rounded-xl shadow-lg p-4 border border-slate-200 flex flex-col flex-1 gap-3 overflow-hidden">
-            <h2 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-blue-900 flex-shrink-0">영상 비교</h2>
+            <h2 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 flex-shrink-0">영상 비교</h2>
             <div className="flex flex-col flex-1 gap-3 min-h-0">
               <div className="flex-1 flex flex-col min-h-0">
-                <p className="text-sm font-bold text-slate-700 mb-2 flex-shrink-0">1회차</p>
+                <p className="text-base font-bold text-slate-700 mb-2 flex-shrink-0">1회차</p>
                 {attempt1.videoUrl ? (
                   <div className="flex-1 min-h-0 overflow-hidden rounded-xl">
                     <VideoPlayer videoUrl={attempt1.videoUrl} />
                   </div>
                 ) : (
                   <div className="flex-1 bg-slate-100 rounded-xl flex items-center justify-center">
-                    <span className="text-slate-400 text-sm">업로드된 영상 없음</span>
+                    <span className="text-slate-400 text-base">업로드된 영상 없음</span>
                   </div>
                 )}
               </div>
               <div className="flex-1 flex flex-col min-h-0">
-                <p className="text-sm font-bold text-slate-700 mb-2 flex-shrink-0">2회차</p>
+                <p className="text-base font-bold text-slate-700 mb-2 flex-shrink-0">2회차</p>
                 {attempt2.videoUrl ? (
                   <div className="flex-1 min-h-0 overflow-hidden rounded-xl">
                     <VideoPlayer videoUrl={attempt2.videoUrl} />
                   </div>
                 ) : (
                   <div className="flex-1 bg-slate-100 rounded-xl flex items-center justify-center">
-                    <span className="text-slate-400 text-sm">업로드된 영상 없음</span>
+                    <span className="text-slate-400 text-base">업로드된 영상 없음</span>
                   </div>
                 )}
               </div>
@@ -559,16 +559,16 @@ export default function ComparisonPage() {
 
             {/* 종합 의견 */}
             <div className="p-5">
-              <h3 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-3">종합 의견</h3>
-              <p className="text-sm text-slate-700 leading-relaxed">{overallOpinion}</p>
+              <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-3">종합 의견</h3>
+              <p className="text-base text-slate-700 leading-relaxed">{overallOpinion}</p>
             </div>
 
             <div className="border-t border-slate-100 mx-5" />
 
             {/* 종합 비교 차트 */}
             <div className="p-5">
-              <h3 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-1">종합 비교 차트</h3>
-              <p className="text-sm text-slate-500 mb-3">
+              <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-1">종합 비교 차트</h3>
+              <p className="text-base text-slate-500 mb-3">
                 각 항목을 개선필요 · 주의 · 적정 3단계로 평가합니다.
               </p>
               <ResponsiveContainer width="100%" height={260}>
@@ -576,9 +576,9 @@ export default function ComparisonPage() {
                   <PolarGrid stroke="#e2e8f0" />
                   <PolarAngleAxis
                     dataKey="metric"
-                    tick={{ fill: '#475569', fontSize: 12, fontWeight: 600 }}
+                    tick={{ fill: '#475569', fontSize: 13, fontWeight: 600 }}
                   />
-                  <PolarRadiusAxis angle={90} domain={[0, 3]} tickCount={4} tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                  <PolarRadiusAxis angle={90} domain={[0, 3]} tickCount={4} tick={{ fill: '#94a3b8', fontSize: 11 }} />
                   <Radar name="1회차" dataKey="1회차" stroke="#6366f1" fill="#6366f1" fillOpacity={0.2} strokeWidth={2} />
                   <Radar name="2회차" dataKey="2회차" stroke="#10b981" fill="#10b981" fillOpacity={0.2} strokeWidth={2} />
                   <Legend iconType="circle" />
@@ -591,8 +591,8 @@ export default function ComparisonPage() {
 
             {/* 피드백 수용 현황 */}
             <div className="p-5">
-              <h3 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-1">피드백 수용 현황</h3>
-              <p className="text-sm text-slate-500 mb-4">1회차 결과 기반으로 2회차에서 각 항목이 얼마나 개선됐는지 추적합니다.</p>
+              <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-1">피드백 수용 현황</h3>
+              <p className="text-base text-slate-500 mb-4">1회차 결과 기반으로 2회차에서 각 항목이 얼마나 개선됐는지 추적합니다.</p>
               <div className="grid grid-cols-2 gap-2.5">
                 {feedbackItems.map((item, idx) => {
                   const statusColors: Record<ImprovementStatus, string> = {
@@ -613,16 +613,16 @@ export default function ComparisonPage() {
                     <div key={idx} className={`p-3 rounded-xl border ${statusColors[item.result.status]}`}>
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className={iconColors[item.result.status]}>{item.icon}</span>
-                        <span className="font-bold text-slate-800 text-sm">{item.title}</span>
+                        <span className="font-bold text-slate-800 text-base">{item.title}</span>
                       </div>
-                      <div className="flex items-center gap-1 text-xs text-slate-600 mb-1.5 flex-wrap">
+                      <div className="flex items-center gap-1 text-sm text-slate-600 mb-1.5 flex-wrap">
                         <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 whitespace-nowrap">{item.attempt1Value}</span>
                         <span className="text-slate-400">→</span>
                         <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 whitespace-nowrap">{item.attempt2Value}</span>
                       </div>
                       <StatusBadge status={item.result.status} />
-                      <p className="text-xs text-slate-400 mt-1">{item.result.label}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{item.note}</p>
+                      <p className="text-sm text-slate-400 mt-1">{item.result.label}</p>
+                      <p className="text-sm text-slate-400 mt-0.5">{item.note}</p>
                     </div>
                   );
                 })}
@@ -633,7 +633,7 @@ export default function ComparisonPage() {
 
             {/* KPI 비교 */}
             <div className="p-5">
-              <h3 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-4">KPI 비교</h3>
+              <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-4">KPI 비교</h3>
               <div className="grid grid-cols-3 gap-3">
                 <KPICompareCard
                   label="발화 속도" unit="음절/분" gradKey="speech"
@@ -660,10 +660,10 @@ export default function ComparisonPage() {
 
             {/* 자가 체크리스트 비교 */}
             <div className="p-5">
-              <h3 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-green-500 mb-1">자가 체크리스트 비교</h3>
-              <p className="text-sm text-slate-500 mb-4">1회차에서 설정한 개선 목표가 2회차에서 실제로 달성됐는지 확인합니다.</p>
+              <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-green-500 mb-1">자가 체크리스트 비교</h3>
+              <p className="text-base text-slate-500 mb-4">1회차에서 설정한 개선 목표가 2회차에서 실제로 달성됐는지 확인합니다.</p>
               {checklistItems.length === 0 ? (
-                <div className="text-center py-6 text-sm text-slate-400">1회차에서 모든 지표가 적정 범위였습니다 🎉</div>
+                <div className="text-center py-6 text-base text-slate-400">1회차에서 모든 지표가 적정 범위였습니다 🎉</div>
               ) : (
                 <div className="space-y-2">
                   {checklistItems.map(item => {
@@ -672,36 +672,36 @@ export default function ComparisonPage() {
                     return (
                       <div key={item.id} className={`rounded-xl border p-3 ${achieved ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`}>
                         <div className="flex items-start justify-between gap-3">
-                          <p className="text-sm text-slate-800 leading-snug flex-1">{item.label}</p>
+                          <p className="text-base text-slate-800 leading-snug flex-1">{item.label}</p>
                           <div className="flex items-center gap-3 flex-shrink-0">
                             <div className="flex flex-col items-center gap-0.5">
-                              <span className="text-xs text-slate-400">자기 체크</span>
-                              <span className={`text-sm font-bold ${selfChecked ? 'text-green-600' : 'text-slate-300'}`}>
+                              <span className="text-sm text-slate-400">자기 체크</span>
+                              <span className={`text-base font-bold ${selfChecked ? 'text-green-600' : 'text-slate-300'}`}>
                                 {selfChecked ? '✓' : '—'}
                               </span>
                             </div>
                             <div className="flex flex-col items-center gap-0.5">
-                              <span className="text-xs text-slate-400">실제 달성</span>
-                              <span className={`text-sm font-bold ${achieved ? 'text-green-600' : 'text-red-500'}`}>
+                              <span className="text-sm text-slate-400">실제 달성</span>
+                              <span className={`text-base font-bold ${achieved ? 'text-green-600' : 'text-red-500'}`}>
                                 {achieved ? '✓' : '✗'}
                               </span>
                             </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5 mt-2">
-                          <span className="text-xs text-slate-400">1회차</span>
-                          <span className="text-xs font-semibold text-slate-700">{getMetricDisplay(item, attempt1DataMap)}</span>
-                          <span className="text-slate-300 text-xs">→</span>
-                          <span className="text-xs text-slate-400">2회차</span>
-                          <span className={`text-xs font-semibold ${achieved ? 'text-green-700' : 'text-red-600'}`}>
+                          <span className="text-sm text-slate-400">1회차</span>
+                          <span className="text-sm font-semibold text-slate-700">{getMetricDisplay(item, attempt1DataMap)}</span>
+                          <span className="text-slate-300 text-sm">→</span>
+                          <span className="text-sm text-slate-400">2회차</span>
+                          <span className={`text-sm font-semibold ${achieved ? 'text-green-700' : 'text-red-600'}`}>
                             {getMetricDisplay(item, attempt2DataMap)}
                           </span>
                         </div>
                         {selfChecked !== achieved && (
-                          <p className="text-xs mt-1.5 font-semibold text-orange-600">
+                          <p className="text-sm mt-1.5 font-semibold text-orange-600">
                             {selfChecked && !achieved
-                              ? '⚠ 스스로 개선했다고 체크했지만 수치상 목표 미달입니다.'
-                              : '✦ 체크하지 않았지만 실제로 목표를 달성했습니다!'}
+                              ? '수치상 목표 미달입니다.'
+                              : '목표를 달성했습니다!'}
                           </p>
                         )}
                       </div>
@@ -715,13 +715,13 @@ export default function ComparisonPage() {
             <div className="flex gap-3 justify-center px-5 pb-6">
               <button
                 onClick={() => navigate(`/presentation/results/${sessionId}/1`)}
-                className="flex-1 py-2.5 bg-white border-2 border-blue-900 text-blue-900 rounded-xl font-semibold hover:bg-blue-50 transition-colors text-sm"
+                className="flex-1 py-2.5 bg-white border-2 border-blue-900 text-blue-900 rounded-xl font-semibold hover:bg-blue-50 transition-colors text-base"
               >
                 1회차 결과 보기
               </button>
               <button
                 onClick={() => navigate(`/presentation/results/${sessionId}/2`)}
-                className="flex-1 py-2.5 bg-blue-900 text-white rounded-xl font-semibold hover:bg-blue-800 transition-colors text-sm"
+                className="flex-1 py-2.5 bg-blue-900 text-white rounded-xl font-semibold hover:bg-blue-800 transition-colors text-base"
               >
                 2회차 결과 보기
               </button>
