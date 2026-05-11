@@ -4,17 +4,20 @@ import type { ChecklistItem } from '../contexts/AppContext';
 import { useState, useEffect, useRef } from 'react';
 import { Timeline } from '../components/Timeline';
 import { VideoPlayer } from '../components/VideoPlayer';
-import { Mic, User } from 'lucide-react';
+import { Mic, User, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip as RechartsTooltip,
   AreaChart, ComposedChart, Area, XAxis, YAxis, CartesianGrid, ReferenceLine, ReferenceArea,
 } from 'recharts';
-import pitchExample from '../../pitch_example.json';
+import pitchExample from '../../json_examples/pitch_example.json';
+import presentationSummary from '../../json_examples/presentation_summary.json';
+import poseData from '../../json_examples/pose.json';
+import refinerData from '../../json_examples/refiner.json';
 
 // ── 원형 진행 바 ──────────────────────────────────────────────────────────────
 function CircleProgress({ value, max = 100, unit = '%', label, color = '#1e3a8a' }: {
-  value: number; max?: number; unit?: string; label: string; color?: string;
+  value: number; max?: number; unit?: string; label?: string; color?: string;
 }) {
   const r = 36;
   const circ = 2 * Math.PI * r;
@@ -35,7 +38,7 @@ function CircleProgress({ value, max = 100, unit = '%', label, color = '#1e3a8a'
           {unit}
         </text>
       </svg>
-      <span className="text-xs font-semibold text-slate-500 text-center">{label}</span>
+      {label && <span className="text-xs font-semibold text-slate-500 text-center">{label}</span>}
     </div>
   );
 }
@@ -119,13 +122,13 @@ function KPICard({ label, value, unit, status, sparkData, gradientId }: {
   const s = KPI_STATUS_STYLE[status];
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col p-3 gap-1.5 min-w-0">
-      <p className="text-xs font-semibold text-slate-500 truncate">{label}</p>
+      <p className="text-sm font-semibold text-slate-500 truncate">{label}</p>
       <div className="flex items-center justify-between gap-1">
         <span className="text-2xl font-bold text-slate-900 leading-none">
           {value}
-          <span className="text-xs font-normal text-slate-400 ml-1">{unit}</span>
+          <span className="text-sm font-normal text-slate-400 ml-1">{unit}</span>
         </span>
-        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${s.badge}`}>
+        <span className={`text-sm font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${s.badge}`}>
           {status}
         </span>
       </div>
@@ -233,12 +236,20 @@ function PresentationChart({
   data,
   sections,
   pitchMean,
+  pitchMin,
+  pitchMax,
+  speechOptimalMin = 270,
+  speechOptimalMax = 330,
 }: {
   data: PresentationPoint[];
   sections: PresentationSection[];
   pitchMean: number;
+  pitchMin: number;
+  pitchMax: number;
+  speechOptimalMin?: number;
+  speechOptimalMax?: number;
 }) {
-  const [activeGraph, setActiveGraph] = useState<'pitch' | 'speech'>('pitch');
+  const [activeGraph, setActiveGraph] = useState<'pitch' | 'speech'>('speech');
   const showPitch  = activeGraph === 'pitch';
   const showSpeech = activeGraph === 'speech';
 
@@ -251,24 +262,24 @@ function PresentationChart({
     <div className="space-y-2">
       {/* 체크박스 토글 + 평균값 (차트 내부에서 겹치지 않도록 범례 영역에 표시) */}
       <div className="flex items-center gap-5 flex-wrap">
-        <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-semibold"
-          style={{ color: CHART_COLOR.pitch }}>
-          <input type="radio" name="graph-select" checked={showPitch}
-            onChange={() => setActiveGraph('pitch')}
-            className="accent-purple-600" />
-          피치 (Hz)
-          <span className="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-mono">
-            평균 {pitchMean.toFixed(0)}Hz
-          </span>
-        </label>
-        <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-semibold"
+        <label className="flex items-center gap-1.5 cursor-pointer select-none text-sm font-semibold"
           style={{ color: CHART_COLOR.speech }}>
           <input type="radio" name="graph-select" checked={showSpeech}
             onChange={() => setActiveGraph('speech')}
             className="accent-orange-600" />
           발화속도 (음절/분)
-          <span className="ml-1 px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded font-mono">
+          <span className="ml-1 px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded font-mono text-xs">
             평균 {speechMean}음절/분
+          </span>
+        </label>
+        <label className="flex items-center gap-1.5 cursor-pointer select-none text-sm font-semibold"
+          style={{ color: CHART_COLOR.pitch }}>
+          <input type="radio" name="graph-select" checked={showPitch}
+            onChange={() => setActiveGraph('pitch')}
+            className="accent-purple-600" />
+          피치 (Hz)
+          <span className="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-mono text-xs">
+            평균 {pitchMean.toFixed(0)}Hz
           </span>
         </label>
       </div>
@@ -282,7 +293,7 @@ function PresentationChart({
               yAxisId="pitch"
               x1={sec.start} x2={sec.end}
               fill="none"
-              label={{ value: sec.label, position: 'insideTop', fontSize: 10,
+              label={{ value: sec.label, position: 'insideTop', fontSize: 12,
                 fill: '#94a3b8', dy: 2, fontWeight: 600 }}
             />
           ))}
@@ -300,6 +311,16 @@ function PresentationChart({
 
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
 
+          {/* 적정 범위 음영 (발화속도만) */}
+          {showSpeech && (
+            <ReferenceArea
+              yAxisId="pitch"
+              y1={speechOptimalMin} y2={speechOptimalMax}
+              fill="#16a34a" fillOpacity={0.1}
+              stroke="#16a34a" strokeOpacity={0.35} strokeWidth={1} strokeDasharray="4 3"
+            />
+          )}
+
           <XAxis
             dataKey="start"
             type="number"
@@ -310,7 +331,7 @@ function PresentationChart({
               const s = String(Math.floor(v % 60)).padStart(2, '0');
               return `${m}:${s}`;
             }}
-            tick={{ fontSize: 10, fill: '#94a3b8' }}
+            tick={{ fontSize: 12, fill: '#94a3b8' }}
             interval={19}
             axisLine={false}
             tickLine={false}
@@ -320,20 +341,29 @@ function PresentationChart({
           <YAxis
             yAxisId="pitch"
             domain={showPitch ? [40, 170] : [150, 450]}
-            tick={{ fontSize: 10, fill: showPitch ? CHART_COLOR.pitch : CHART_COLOR.speech }}
-            axisLine={false} tickLine={false} width={44}
+            tick={{ fontSize: 12, fill: showPitch ? CHART_COLOR.pitch : CHART_COLOR.speech }}
+            axisLine={false} tickLine={false} width={48}
           />
 
           <RechartsTooltip content={<PresentationChartTooltip />} />
 
-          {/* 평균 기준선 (레이블 없이 점선만 — 평균값은 위 범례에 표시) */}
+          {/* 발화속도 평균 기준선 */}
+          {/* 피치 최고·최저 기준선 */}
           {showPitch && (
-            <ReferenceLine yAxisId="pitch" y={pitchMean}
-              stroke={CHART_COLOR.pitch} strokeDasharray="5 3" strokeOpacity={0.5} />
+            <ReferenceLine yAxisId="pitch" y={pitchMax}
+              stroke={CHART_COLOR.pitch} strokeWidth={1} strokeDasharray="3 2" strokeOpacity={0.5}
+              label={{ value: `최고 ${pitchMax}Hz`, position: 'insideRight', fontSize: 11, fill: CHART_COLOR.pitch, opacity: 0.8 }}
+            />
+          )}
+          {showPitch && (
+            <ReferenceLine yAxisId="pitch" y={pitchMin}
+              stroke={CHART_COLOR.pitch} strokeWidth={1} strokeDasharray="3 2" strokeOpacity={0.5}
+              label={{ value: `최저 ${pitchMin}Hz`, position: 'insideRight', fontSize: 11, fill: CHART_COLOR.pitch, opacity: 0.8 }}
+            />
           )}
           {showSpeech && (
             <ReferenceLine yAxisId="pitch" y={speechMean}
-              stroke={CHART_COLOR.speech} strokeDasharray="5 3" strokeOpacity={0.5} />
+              stroke={CHART_COLOR.speech} strokeWidth={2} strokeDasharray="6 3" />
           )}
 
           {showPitch && (
@@ -370,12 +400,12 @@ function generateMockChecklist(ar: {
         ? `발화 속도 높이기 · 현재 ${ar.speechRate}음절/분 → 목표 270–330`
         : `발화 속도 줄이기 · 현재 ${ar.speechRate}음절/분 → 목표 270–330` });
 
-  if (ar.pitchVariation < 15 || ar.pitchVariation > 35)
+  if (ar.pitchVariation < 70 || ar.pitchVariation > 90)
     items.push({ id: 'pitchVariation', category: 'voice', metric_key: 'pitchVariation',
-      condition: 'in_range', target_min: 15, target_max: 35, is_completed: false,
-      label: ar.pitchVariation < 15
-        ? `피치 변화폭 늘리기 · 현재 ${ar.pitchVariation}Hz → 목표 15–35Hz`
-        : `피치 변화폭 줄이기 · 현재 ${ar.pitchVariation}Hz → 목표 15–35Hz` });
+      condition: 'in_range', target_min: 70, target_max: 90, is_completed: false,
+      label: ar.pitchVariation < 70
+        ? `피치 변화폭 늘리기 · 현재 ${ar.pitchVariation}Hz → 목표 70–90Hz`
+        : `피치 변화폭 줄이기 · 현재 ${ar.pitchVariation}Hz → 목표 70–90Hz` });
 
   if (ar.eyeContact < 70)
     items.push({ id: 'eyeContact', category: 'posture', metric_key: 'eyeContact',
@@ -440,9 +470,12 @@ function ChecklistPanel({
   );
 }
 
-
-
-
+// ── 자세 라벨 한글 매핑 ───────────────────────────────────────────────────────
+const POSE_LABEL_KO: Record<string, string> = {
+  'Touching body': '몸 만지기',
+  'Slanting':      '몸 기울이기',
+  'Touching face': '얼굴 만지기',
+};
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 export default function ResultsPage() {
@@ -453,6 +486,7 @@ export default function ResultsPage() {
   const [activeTab, setActiveTab] = useState<'overall' | 'voice' | 'posture'>('overall');
   const [currentVideoTime, setCurrentVideoTime] = useState(0);
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
+  const [expandedPoses, setExpandedPoses] = useState<Set<string>>(new Set());
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const overallRef = useRef<HTMLDivElement>(null);
@@ -504,14 +538,47 @@ export default function ResultsPage() {
   if (!currentSession) return null;
   if (!currentAttempt) { navigate('/dashboard'); return null; }
 
+  // 피치 변화폭 (최고–최저): ar 기본값보다 먼저 계산해 pitchVariation 기본값으로 사용
+  const { min_hz, max_hz } = pitchExample.pitch_metrics.summary;
+  const pitchRange = Math.round((max_hz - min_hz) * 10) / 10;
+
   // 기본값과 실제 데이터 병합
   const ar = {
     speechRate: 300, eyeContact: 78, duration: '8:30', postureScore: 75,
-    pitchVariation: 75, avgIPsPerSentence: 3.5, avgWordsPerSentence: 10,
+    pitchVariation: pitchRange, avgIPsPerSentence: 3.5, avgWordsPerSentence: 10,
     lateSpeedRatio: 1.05, longPauseCount: 2, wordPauseCount: 12,
     fillerRate: 0.35, habitualBehaviorCount: 3,
     ...currentAttempt.analysisResults,
   };
+
+  // label별 탐지 구간 목록 (토글 시 표시)
+  const segmentsByLabel = poseData.timeline.reduce<Record<string, { start: number; end: number; duration: number }[]>>(
+    (acc, item) => {
+      (acc[item.label] ??= []).push({ start: item.start, end: item.end, duration: item.duration });
+      return acc;
+    }, {}
+  );
+
+  // 자세 Top 3: 발생 횟수(빈도수) 기준 정렬
+  // 백엔드 연동 시 analysisResults.postureTop3 로 교체
+  const postureTop3 = (() => {
+    const raw = (currentAttempt.analysisResults as any)?.postureTop3;
+    if (raw) return raw as { rank: number; label: string; count: number; percent: number }[];
+    const counts: Record<string, number> = {};
+    for (const item of poseData.timeline) {
+      counts[item.label] = (counts[item.label] ?? 0) + 1;
+    }
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+    return Object.entries(counts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3)
+      .map(([label, count], idx) => ({
+        rank: idx + 1,
+        label,
+        count,
+        percent: Math.round((count / total) * 100),
+      }));
+  })();
 
   // 발표 전체 그래프 데이터
   // 백엔드 연동 시: ar.pitchTimeline / ar.speechRateTimeline 이 있으면 그걸 사용
@@ -522,8 +589,7 @@ export default function ResultsPage() {
   );
 
   // KPI 피치 카드: pitch_example 실데이터 사용
-  // 백엔드 연동 시 analysisResults.pitchStdHz, analysisResults.pitchSparkline 으로 교체
-  const pitchStdHz = pitchExample.pitch_metrics.summary.std_hz;
+  // 백엔드 연동 시 analysisResults.pitchRange, analysisResults.pitchSparkline 으로 교체
   const pitchSparkData = pitchTimeline
     .filter((_, i) => i % Math.max(1, Math.floor(pitchTimeline.length / 24)) === 0)
     .slice(0, 24)
@@ -532,31 +598,23 @@ export default function ResultsPage() {
   const toSpeechLevel = (rate: number): number =>
     rate >= 270 && rate <= 330 ? 3 : rate >= 240 && rate <= 360 ? 2 : 1;
   const toPitchLevel = (hz: number): number =>
-    hz >= 15 && hz <= 35 ? 3 : hz >= 8 && hz <= 50 ? 2 : 1;
+    hz >= 70 && hz <= 90 ? 3 : hz >= 41 ? 2 : 1;
   const toPostureLevel = (score: number): number => score >= 70 ? 3 : score >= 50 ? 2 : 1;
   const toEyeLevel = (pct: number): number => pct >= 70 ? 3 : pct >= 50 ? 2 : 1;
 
   const radarData = [
     { metric: '발화 속도',  level: toSpeechLevel(ar.speechRate) },
-    { metric: '피치 변화폭', level: toPitchLevel(pitchStdHz) },
+    { metric: '피치 변화폭', level: toPitchLevel(pitchRange) },
     { metric: '자세',       level: toPostureLevel(ar.postureScore) },
     { metric: '정면 응시',  level: toEyeLevel(ar.eyeContact) },
   ];
 
-  const timelineData = [
-    { time: '0:00', event: '발표 시작',       type: 'start' as const },
-    { time: '0:30', event: '도입부 - 주제 소개', type: 'content' as const,
-      script: '안녕하세요. 오늘 발표 연습 서비스에 대해 소개하겠습니다.' },
-    { time: '1:45', event: '본론 1 - 문제 정의', type: 'content' as const,
-      script: '현재 많은 학생들과 직장인들이 발표에 대한 두려움을 가지고 있습니다. 우리 서비스는 이러한 문제를 해결하고자 합니다.' },
-    { time: '4:10', event: '본론 2 - 해결방안', type: 'content' as const,
-      script: '효과적인 발표를 위해서는 시선 처리, 음성 톤, 자세 등 다양한 요소가 필요합니다. 발표 영상을 업로드하면 자동으로 분석이 진행됩니다.' },
-    { time: '6:45', event: '본론 3 - 기대효과', type: 'content' as const,
-      script: '객관적인 피드백을 통해 발표 능력을 향상시킬 수 있습니다.' },
-    { time: '8:00', event: '결론 및 마무리',   type: 'content' as const,
-      script: '반복 연습을 통해 자신감을 키울 수 있습니다. 이상으로 발표를 마치겠습니다. 감사합니다.' },
-    { time: '8:30', event: '발표 종료',        type: 'end' as const },
-  ];
+  const timelineData = presentationSummary.timeline as {
+    time: string;
+    event: string;
+    type: 'start' | 'content' | 'end';
+    script?: string;
+  }[];
 
   const handleTimelineClick = (timeString: string) => {
     const [minutes, seconds] = timeString.split(':').map(Number);
@@ -661,14 +719,14 @@ export default function ResultsPage() {
 
             {/* ─── 종합 섹션 ─── */}
             <div ref={overallRef} data-section="overall" className="p-5 space-y-5">
-              <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide">4가지 지표 요약</h3>
+              <h3 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-blue-900">4가지 지표 요약</h3>
 
               <ResponsiveContainer width="100%" height={220}>
                 <RadarChart data={radarData} margin={{ top: 10, right: 24, bottom: 10, left: 24 }}>
                   <PolarGrid stroke="#e2e8f0" />
                   <PolarAngleAxis
                     dataKey="metric"
-                    tick={{ fontSize: 11, fill: '#475569', fontWeight: 600 }}
+                    tick={{ fontSize: 13, fill: '#475569', fontWeight: 600 }}
                   />
                   <PolarRadiusAxis domain={[0, 3]} tick={false} axisLine={false} tickCount={4} />
                   <Radar
@@ -692,10 +750,10 @@ export default function ResultsPage() {
                   gradientId="kpi-speech"
                 />
                 <KPICard
-                  label="피치 변화폭"
-                  value={Math.round(pitchStdHz * 10) / 10}
+                  label="피치 변화폭 (최고 - 최저)"
+                  value={pitchRange}
                   unit="Hz"
-                  status={pitchStdHz >= 15 && pitchStdHz <= 35 ? '적정' : pitchStdHz >= 8 && pitchStdHz <= 50 ? '주의' : '경고'}
+                  status={pitchRange >= 70 && pitchRange <= 90 ? '적정' : pitchRange >= 41 ? '주의' : '경고'}
                   sparkData={pitchSparkData}
                   gradientId="kpi-pitch"
                 />
@@ -710,11 +768,9 @@ export default function ResultsPage() {
               </div>
 
               <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                <h3 className="text-sm font-semibold text-slate-900 mb-2">종합 평가</h3>
+                <h3 className="text-base font-bold text-slate-900 mb-2">종합 평가</h3>
                 <p className="text-sm text-slate-700 leading-relaxed">
-                  전반적으로 안정적인 발표였습니다. 명확한 논리 구조와 효과적인 제스처 활용이 돋보였으며,
-                  청중과의 아이컨택도 양호한 편입니다. 다만 말하는 속도가 다소 빠르고, 중반부에 시선 처리가
-                  산만해지는 경향이 있었습니다.
+                  {presentationSummary.overall_comment}
                 </p>
               </div>
 
@@ -733,18 +789,20 @@ export default function ResultsPage() {
 
               {/* 발표 전체 그래프 (피치 + 발화속도) */}
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                <p className="text-xs font-semibold text-slate-600 mb-3 uppercase tracking-wide">발표 전체 그래프</p>
+                <p className="text-sm font-semibold text-slate-600 mb-3 uppercase tracking-wide">발표 전체 그래프</p>
                 <PresentationChart
                   data={presentationData}
                   sections={presentationSections}
                   pitchMean={pitchExample.pitch_metrics.summary.mean_hz}
+                  pitchMin={min_hz}
+                  pitchMax={max_hz}
                 />
               </div>
 
               {/* 발화 속도 + 피치 변화폭 (나란히) */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                  <p className="text-xs font-semibold text-slate-600 mb-3 uppercase tracking-wide">발화 속도</p>
+                  <p className="text-sm font-semibold text-slate-600 mb-3 uppercase tracking-wide">발화 속도</p>
                   <RangeGauge
                     value={ar.speechRate}
                     optimalMin={270} optimalMax={330}
@@ -753,15 +811,90 @@ export default function ResultsPage() {
                   />
                 </div>
                 <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                  <p className="text-xs font-semibold text-slate-600 mb-3 uppercase tracking-wide">피치 변화폭</p>
+                  <p className="text-sm font-semibold text-slate-600 mb-3 uppercase tracking-wide">피치 변화폭</p>
                   <RangeGauge
-                    value={ar.pitchVariation ?? 75}
+                    value={ar.pitchVariation}
                     optimalMin={70} optimalMax={90}
                     unit="Hz" maxDisplay={150}
                     minLabel="단조로움" maxLabel="변화 과다"
                   />
                 </div>
               </div>
+
+              {/* 휴지 기간 Top (3초 이상) */}
+              {(() => {
+                const PAUSE_THRESHOLD = refinerData.refined_result.details.pause_analysis.sentence_pause_threshold_sec;
+                const allPauses = refinerData.refined_result.details.pause_analysis.long_sentence_pause_top3;
+                // 이전 문장 조회용 인덱스 맵
+                const textByIndex = Object.fromEntries(allPauses.map(p => [p.index, p.text]));
+                const qualifying = allPauses.filter(p => p.pause_duration_sec >= PAUSE_THRESHOLD);
+
+                if (qualifying.length === 0) return null;
+
+                const fmtTime = (sec: number) => {
+                  const m = Math.floor(sec / 60);
+                  const s = String(Math.floor(sec % 60)).padStart(2, '0');
+                  return `${m}:${s}`;
+                };
+
+                return (
+                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                    <p className="text-sm font-semibold text-slate-600 mb-3 uppercase tracking-wide">
+                      휴지 기간 ({PAUSE_THRESHOLD}초 이상)
+                    </p>
+                    <div className="space-y-3">
+                      {qualifying.map((pause, i) => {
+                        const pauseStart = pause.start - pause.pause_duration_sec;
+                        const prevText = pause.index > 0 ? textByIndex[pause.index - 1] : null;
+                        const durationColor = pause.pause_duration_sec >= 6
+                          ? 'bg-red-100 text-red-700 border-red-200'
+                          : 'bg-orange-100 text-orange-700 border-orange-200';
+
+                        return (
+                          <div key={i} className="bg-white rounded-xl border border-slate-200 p-3 space-y-2.5">
+                            {/* 헤더: 휴지 길이 + 이동 버튼 */}
+                            <div className="flex items-center justify-between">
+                              <span className={`text-sm font-bold px-2.5 py-1 rounded-lg border ${durationColor}`}>
+                                {pause.pause_duration_sec.toFixed(1)}초 휴지
+                              </span>
+                              <button
+                                onClick={() => handleTimelineClick(fmtTime(pauseStart))}
+                                className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg text-blue-700 text-xs font-semibold transition-colors"
+                              >
+                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                                </svg>
+                                {fmtTime(pauseStart)} 구간 보기
+                              </button>
+                            </div>
+
+                            {/* 이전 문장 → 휴지 → 이후 문장 */}
+                            <div className="space-y-1.5">
+                              <div className="flex gap-2">
+                                <span className="text-xs font-semibold text-slate-400 w-14 flex-shrink-0 pt-0.5">이전 발화</span>
+                                <p className="text-xs text-slate-600 leading-relaxed">
+                                  {prevText ?? '(발표 시작 전)'}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 pl-14">
+                                <div className="h-px flex-1 border-t-2 border-dashed border-slate-300" />
+                                <span className="text-[11px] font-semibold text-slate-400 flex-shrink-0">
+                                  ↓ {pause.pause_duration_sec.toFixed(1)}초
+                                </span>
+                                <div className="h-px flex-1 border-t-2 border-dashed border-slate-300" />
+                              </div>
+                              <div className="flex gap-2">
+                                <span className="text-xs font-semibold text-slate-400 w-14 flex-shrink-0 pt-0.5">이후 발화</span>
+                                <p className="text-xs text-slate-600 leading-relaxed">{pause.text}</p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
             </div>
 
@@ -776,36 +909,98 @@ export default function ResultsPage() {
                 <h3 className="text-base font-bold text-slate-900">자세 및 응시</h3>
               </div>
 
-              {/* 3가지 지표 */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 flex items-center justify-center">
-                  <CircleProgress
-                    value={ar.eyeContact}
-                    unit="%"
-                    label="정면 응시 비율"
-                    color={ar.eyeContact >= 70 ? '#16a34a' : '#dc2626'}
-                  />
+              {/* 정면 응시 + 자세 */}
+              <div className="flex gap-3">
+                {/* 왼쪽: 정면 응시 비율 (콘텐츠 너비만) */}
+                <div className="flex-none bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col">
+                  <p className="text-sm font-semibold text-slate-600 mb-3 uppercase tracking-wide">정면 응시 비율</p>
+                  <div className="flex-1 flex items-center justify-center">
+                    <CircleProgress
+                      value={ar.eyeContact}
+                      unit="%"
+                      color={ar.eyeContact >= 70 ? '#16a34a' : '#dc2626'}
+                    />
+                  </div>
                 </div>
-                <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 flex items-center justify-center">
-                  <CircleProgress
-                    value={ar.postureScore ?? 75}
-                    unit="점"
-                    label="자세 안정성"
-                    color={(ar.postureScore ?? 75) >= 70 ? '#2563eb' : '#f59e0b'}
-                  />
-                </div>
-                <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 flex items-center justify-center">
-                  <CountBadge
-                    count={ar.habitualBehaviorCount ?? 3}
-                    label="부정적 행동 횟수"
-                    thresholds={[0, 7]}
-                  />
+
+                {/* 오른쪽: 자세 Top 3 (나머지 전체) */}
+                <div className="flex-1 bg-slate-50 rounded-xl p-4 border border-slate-200">
+                  <p className="text-sm font-semibold text-slate-600 mb-3 uppercase tracking-wide">자세 Top 3</p>
+                  <div className="space-y-2">
+                    {postureTop3.map(({ rank, label, count, percent }) => {
+                      const rankCls = rank === 1
+                        ? 'bg-red-500 text-white'
+                        : rank === 2
+                        ? 'bg-orange-400 text-white'
+                        : 'bg-amber-400 text-white';
+                      const barCls = rank === 1 ? 'bg-red-400' : rank === 2 ? 'bg-orange-400' : 'bg-amber-300';
+                      const isExpanded = expandedPoses.has(label);
+                      const segments = segmentsByLabel[label] ?? [];
+                      const fmtSec = (s: number) =>
+                        `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+                      const toggleExpand = () => setExpandedPoses(prev => {
+                        const next = new Set(prev);
+                        next.has(label) ? next.delete(label) : next.add(label);
+                        return next;
+                      });
+                      return (
+                        <div key={rank} className="flex gap-2.5">
+                          <div className="w-11 h-11 rounded-xl border-2 border-dashed border-slate-300 bg-white flex-shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <div
+                              className="flex items-center justify-between mb-1 cursor-pointer"
+                              onClick={toggleExpand}
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${rankCls}`}>
+                                  {rank}
+                                </span>
+                                <span className="text-sm font-semibold text-slate-800">
+                                  {POSE_LABEL_KO[label] ?? label}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs text-slate-500 font-mono">{count}회 ({percent}%)</span>
+                                {isExpanded
+                                  ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+                                  : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+                              </div>
+                            </div>
+                            <div className="h-1.5 bg-slate-200 rounded-full">
+                              <div className={`h-full rounded-full ${barCls}`} style={{ width: `${percent}%` }} />
+                            </div>
+                            {isExpanded && (
+                              <div className="mt-2 max-h-36 overflow-y-auto space-y-1 pr-0.5">
+                                {segments.map((seg, i) => (
+                                  <div key={i} className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
+                                    <span className="text-xs text-slate-600 font-mono">
+                                      {fmtSec(seg.start)} – {fmtSec(seg.end)}
+                                      <span className="text-slate-400 ml-1.5">({seg.duration.toFixed(1)}초)</span>
+                                    </span>
+                                    <button
+                                      onClick={() => handleTimelineClick(fmtSec(seg.start))}
+                                      className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-semibold ml-2 flex-shrink-0 transition-colors"
+                                    >
+                                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                                      </svg>
+                                      보기
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-slate-900">자가 체크리스트</h4>
+                  <h4 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-green-500">자가 체크리스트</h4>
                 </div>
                 <ChecklistPanel
                   items={checklistItems}
