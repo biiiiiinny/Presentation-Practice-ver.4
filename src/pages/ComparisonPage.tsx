@@ -5,14 +5,18 @@ import { useApp } from '../contexts/AppContext';
 import { VideoPlayer } from '../components/VideoPlayer';
 import {
   ArrowLeft,
-  CheckCircle, XCircle, AlertTriangle,
+  CheckCircle, XCircle, AlertTriangle, Eye,
 } from 'lucide-react';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
   PolarRadiusAxis, ResponsiveContainer, Legend, Tooltip as RechartsTooltip,
 } from 'recharts';
+import mockGazeResult1 from '../../json_examples/1회차 결과 json/gaze_1.json';
+import mockGazeResult2 from '../../json_examples/2회차 결과 json/gaze_2.json';
+import mockRefinerResult1 from '../../json_examples/1회차 결과 json/refiner_1.json';
+import mockRefinerResult2 from '../../json_examples/2회차 결과 json/refiner_2.json';
+import type { GazeResult, RefinerResult } from '../contexts/AppContext';
 
-type ImprovementStatus = 'improved' | 'partial' | 'maintained' | 'worsened' | 'overcorrected';
 
 // ── LLM 종합 의견 JSON 스펙 ────────────────────────────────────────────────────
 // 백엔드에서 이 구조의 JSON을 내려주면 됩니다.
@@ -45,11 +49,6 @@ const toDurationLevel  = (sec: number, limitSec: number): number => {
 
 interface CheckResult { sentence: string; level: number; }
 
-function levelToStatus(l1: number, l2: number): ImprovementStatus {
-  if (l2 > l1) return 'improved';
-  if (l2 < l1) return 'worsened';
-  return 'maintained';
-}
 
 function speechResult(rate: number): CheckResult {
   if (rate >= 270 && rate <= 330) return { sentence: `발화 속도 ${rate} 자/분으로 청중이 따라오기 좋은 속도였어요`, level: 3 };
@@ -241,6 +240,162 @@ const ComparisonRadarTooltip = ({ active, payload }: any) => {
   );
 };
 
+// ── 자세 라벨 한글 매핑 ───────────────────────────────────────────────────────
+const POSE_LABEL_KO: Record<string, string> = {
+  'Touching head': '머리 만지기',
+  'Touching face': '얼굴 만지기',
+  'Touching body': '몸 만지기',
+  'Touching hand': '손 만지기',
+  'Swaying head':  '머리 흔들기',
+  'Swaying body':  '몸 흔들기',
+};
+
+// ── 시선 방향 헬퍼 (모듈 레벨) ───────────────────────────────────────────────
+const GAZE_DIR_LABELS: { r: number; c: number; label: string }[] = [
+  { r: 0, c: 1, label: '위쪽' }, { r: 2, c: 1, label: '아래쪽' },
+  { r: 1, c: 0, label: '왼쪽' }, { r: 1, c: 2, label: '오른쪽' },
+];
+const dominantOffCenter = (grid: number[][]): string | null => {
+  const best = GAZE_DIR_LABELS.reduce((a, b) => grid[a.r][a.c] >= grid[b.r][b.c] ? a : b);
+  return grid[best.r][best.c] > grid[1][1] ? best.label : null;
+};
+
+// ── 자가 체크리스트 서브 컴포넌트 ────────────────────────────────────────────
+function CheckIcon({ level }: { level: number }) {
+  if (level === 1) return <XCircle className="w-4 h-4 text-red-500" />;
+  if (level === 2) return <AlertTriangle className="w-4 h-4 text-orange-400" />;
+  return <div className="w-4 h-4 rounded-full border-2 border-slate-200" />;
+}
+
+function checkLabel(level: number) {
+  if (level === 1) return { text: '개선 필요', cls: 'text-red-600' };
+  if (level === 2) return { text: '주의',      cls: 'text-orange-500' };
+  return { text: '적정', cls: 'text-slate-400' };
+}
+
+function HeaderBadge({ level1, level2 }: { level1: number; level2: number }) {
+  if (level2 === 3 && level1 === 3) return null;
+  if (level2 === 3) return (
+    <div className="flex items-center gap-1 text-green-700 font-semibold text-sm flex-shrink-0">
+      <CheckCircle className="w-4 h-4" /><span>개선됨</span>
+    </div>
+  );
+  if (level2 === 2) return (
+    <div className="flex items-center gap-1 text-orange-500 font-semibold text-sm flex-shrink-0">
+      <AlertTriangle className="w-4 h-4" /><span>주의</span>
+    </div>
+  );
+  return (
+    <div className="flex items-center gap-1 text-red-600 font-semibold text-sm flex-shrink-0">
+      <XCircle className="w-4 h-4" /><span>개선필요</span>
+    </div>
+  );
+}
+
+// ── 시선 비교 그리드 ─────────────────────────────────────────────────────────
+function GazeComparisonGrid({ grid1, grid2 }: { grid1: number[][]; grid2: number[][] }) {
+  const eye1 = Math.round(grid1[1][1] * 10) / 10;
+  const eye2 = Math.round(grid2[1][1] * 10) / 10;
+  const eyeDiff = Math.round((eye2 - eye1) * 10) / 10;
+  const centerImproved = eyeDiff >= 3;
+  const centerDecreased = eyeDiff <= -3;
+
+  const maxNonCenter = Math.max(
+    ...grid2.flatMap((row, ri) => row.map((v, ci) => (ri === 1 && ci === 1 ? 0 : v))),
+    0.01
+  );
+
+  const diffSign = eyeDiff >= 0 ? '+' : '';
+  const diffCls = centerImproved ? 'text-green-600' : centerDecreased ? 'text-red-500' : 'text-slate-400';
+
+  return (
+    <div className="w-full flex flex-col gap-3">
+      {/* 요약 카드 */}
+      <div className="flex items-center justify-center gap-4 bg-white border border-slate-200 rounded-xl px-5 py-3 shadow-sm">
+        <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
+          <Eye className="w-5 h-5 text-blue-500" />
+        </div>
+        <div className="flex items-baseline gap-2">
+          <span className="text-sm text-slate-500 font-medium">2회차 정면 응시 비율</span>
+          <span className="text-xl font-bold text-blue-600">{eye2}%</span>
+        </div>
+        <div className="w-px h-6 bg-slate-200 flex-shrink-0" />
+        <div className="flex items-baseline gap-2">
+          <span className="text-sm text-slate-400 font-medium">1회차 대비</span>
+          <span className={`text-xl font-bold ${diffCls}`}>{diffSign}{eyeDiff}%p</span>
+        </div>
+      </div>
+
+      {/* 방향 레이블 + 그리드 */}
+      <div className="flex items-center gap-2 justify-center">
+        <span className="text-xs font-semibold text-slate-400 w-4 text-center">좌</span>
+        <div className="flex flex-col gap-1 items-center">
+          <span className="text-xs font-semibold text-slate-400">상</span>
+          <div className="grid grid-cols-3 gap-1">
+            {grid2.map((row, ri) =>
+              row.map((val2, ci) => {
+                const isCenter = ri === 1 && ci === 1;
+                const delta = Math.round((grid2[ri][ci] - grid1[ri][ci]) * 10) / 10;
+                const absVal = Math.round(val2 * 10) / 10;
+                const absD = Math.abs(delta);
+                const badgeUp = delta >= 0.5;
+                const badgeDown = delta <= -0.5;
+                const symbol = badgeUp ? '▲' : badgeDown ? '▼' : '—';
+                const badgeStr = absD < 0.05 ? '' : `${absD.toFixed(1)}%p`;
+
+                if (isCenter) {
+                  const bg = centerImproved
+                    ? 'rgba(15, 118, 110, 0.88)'
+                    : centerDecreased
+                    ? 'rgba(55, 65, 81, 0.9)'
+                    : 'rgba(30, 64, 175, 0.75)';
+                  const badgeBg = badgeUp ? 'bg-green-400/30' : badgeDown ? 'bg-red-400/30' : 'bg-white/20';
+                  const badgeTextCls = badgeUp ? 'text-green-200' : badgeDown ? 'text-red-200' : 'text-white/60';
+                  return (
+                    <div
+                      key={`${ri}-${ci}`}
+                      className="w-20 h-20 rounded-xl flex flex-col items-center justify-center gap-0.5 relative z-10 scale-[1.13] shadow-xl"
+                      style={{ background: bg }}
+                    >
+                      <span className="text-[10px] font-bold text-white/70 tracking-wide">정면</span>
+                      <span className="text-2xl font-bold text-white leading-none">{absVal}%</span>
+                      <div className={`flex items-center gap-0.5 rounded-full px-1.5 py-0.5 ${badgeBg}`}>
+                        <span className={`text-[10px] font-bold leading-none ${badgeTextCls}`}>{symbol}</span>
+                        {badgeStr && <span className={`text-[10px] font-semibold leading-none ${badgeTextCls}`}>{badgeStr}</span>}
+                      </div>
+                    </div>
+                  );
+                }
+
+                const intensity = Math.min(val2 / (maxNonCenter * 1.2), 1);
+                const bgOpacity = 0.04 + intensity * 0.22;
+                const bg = `rgba(59, 130, 246, ${bgOpacity})`;
+                const badgeCls = badgeUp ? 'text-green-600' : badgeDown ? 'text-red-500' : 'text-slate-400';
+
+                return (
+                  <div
+                    key={`${ri}-${ci}`}
+                    className="w-20 h-20 rounded-lg flex flex-col items-center justify-center gap-0.5 border border-slate-200"
+                    style={{ background: bg }}
+                  >
+                    <span className="text-base font-bold text-slate-700 leading-none">{absVal}%</span>
+                    <div className="flex items-center gap-0.5">
+                      <span className={`text-[10px] font-bold leading-none ${badgeCls}`}>{symbol}</span>
+                      {badgeStr && <span className={`text-[10px] font-semibold leading-none ${badgeCls}`}>{badgeStr}</span>}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <span className="text-xs font-semibold text-slate-400">하</span>
+        </div>
+        <span className="text-xs font-semibold text-slate-400 w-4 text-center">우</span>
+      </div>
+    </div>
+  );
+}
+
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 export default function ComparisonPage() {
   const navigate = useNavigate();
@@ -269,15 +424,15 @@ export default function ComparisonPage() {
   }, [videoUrl2]);
 
   const [opinion, setOpinion] = useState<ComparisonOpinion | null>(null);
-
-  useEffect(() => {
-    if (!sessionId) return;
-    // TODO: 백엔드 연동 시 아래 주석을 해제하고 엔드포인트를 맞춰주세요.
-    // fetch(`/api/sessions/${sessionId}/comparison-opinion`)
-    //   .then(r => r.json())
-    //   .then((data: ComparisonOpinion) => setOpinion(data))
-    //   .catch(console.error);
-  }, [sessionId]);
+  // TODO: 백엔드 연동 시 아래 useEffect의 주석을 해제하고 엔드포인트를 맞춰주세요.
+  // useEffect(() => {
+  //   if (!sessionId) return;
+  //   fetch(`/api/sessions/${sessionId}/comparison-opinion`)
+  //     .then(r => r.json())
+  //     .then((data: ComparisonOpinion) => setOpinion(data))
+  //     .catch(console.error);
+  // }, [sessionId]);
+  void setOpinion; // placeholder until backend is wired
 
   if (!currentSession || currentSession.attempts.length < 2) {
     navigate('/dashboard');
@@ -287,15 +442,22 @@ export default function ComparisonPage() {
   const attempt1 = currentSession.attempts[0];
   const attempt2 = currentSession.attempts[1];
 
-  const attempt1Data = attempt1.analysisResults ?? {
-    speechRate: 360, eyeContact: 78, duration: '8:30', negativePoseDurationRatio: 0.20,
-    pitchVariation: 75, avgIPsPerSentence: 3.5, avgWordsPerSentence: 10,
-    lateSpeedRatio: 1.05, longPauseCount: 2, wordPauseCount: 12, fillerRate: 0.35,
+  const refiner1: RefinerResult = (attempt1.analysisResults as any)?.refinerResult ?? (mockRefinerResult1 as unknown as RefinerResult);
+  const refiner2: RefinerResult = (attempt2.analysisResults as any)?.refinerResult ?? (mockRefinerResult2 as unknown as RefinerResult);
+
+  const attempt1Data = {
+    ...(attempt1.analysisResults ?? {
+      speechRate: 360, eyeContact: 78, duration: '8:30',
+      pitchVariation: 75, lateSpeedRatio: 1.05,
+    }),
+    negativePoseDurationRatio: refiner1.refined_result.details.negative_posture_analysis.negative_posture_duration_ratio,
   };
-  const attempt2Data = attempt2.analysisResults ?? {
-    speechRate: 330, eyeContact: 85, duration: '9:00', negativePoseDurationRatio: 0.08,
-    pitchVariation: 80, avgIPsPerSentence: 2.9, avgWordsPerSentence: 10,
-    lateSpeedRatio: 1.02, longPauseCount: 1, wordPauseCount: 9, fillerRate: 0.28,
+  const attempt2Data = {
+    ...(attempt2.analysisResults ?? {
+      speechRate: 330, eyeContact: 85, duration: '9:00',
+      pitchVariation: 80, lateSpeedRatio: 1.02,
+    }),
+    negativePoseDurationRatio: refiner2.refined_result.details.negative_posture_analysis.negative_posture_duration_ratio,
   };
 
   const attempt1Seconds = durationToSeconds(attempt1Data.duration);
@@ -306,21 +468,39 @@ export default function ComparisonPage() {
   const dur1 = video1Duration != null ? Math.round(video1Duration) : attempt1Seconds;
   const dur2 = video2Duration != null ? Math.round(video2Duration) : attempt2Seconds;
 
-  // ── 레이더 차트 데이터 ─────────────────────────────────────────────────────
-  const a1 = attempt1Data as any;
-  const a2 = attempt2Data as any;
-  const radarData = [
-    { metric: '발화 속도',    '1회차': toSpeechLevel(attempt1Data.speechRate),         '2회차': toSpeechLevel(attempt2Data.speechRate) },
-    { metric: '피치 변화폭',  '1회차': toPitchLevel(a1.pitchVariation ?? 75),          '2회차': toPitchLevel(a2.pitchVariation ?? 75) },
-    { metric: '후반부 말속도', '1회차': toLateSpeedLevel(a1.lateSpeedRatio ?? 1.05),   '2회차': toLateSpeedLevel(a2.lateSpeedRatio ?? 1.02) },
-    { metric: '자세 안정성',  '1회차': toPostureLevel(a1.negativePoseDurationRatio ?? 0.20), '2회차': toPostureLevel(a2.negativePoseDurationRatio ?? 0.08) },
-    { metric: '정면 응시',    '1회차': toEyeLevel(attempt1Data.eyeContact),            '2회차': toEyeLevel(attempt2Data.eyeContact) },
-    { metric: '발표 시간',    '1회차': toDurationLevel(dur1, timeLimitSeconds), '2회차': toDurationLevel(dur2, timeLimitSeconds) },
-  ];
+  const gaze1: GazeResult = (attempt1.analysisResults as any)?.gazeResult ?? (mockGazeResult1 as unknown as GazeResult);
+  const gaze2: GazeResult = (attempt2.analysisResults as any)?.gazeResult ?? (mockGazeResult2 as unknown as GazeResult);
+  const gazeGrid1 = gaze1.gaze_metrics.grid_percent;
+  const gazeGrid2 = gaze2.gaze_metrics.grid_percent;
 
-  // ── 자가 체크리스트 ───────────────────────────────────────────────────────
+  const gazeEye1 = Math.round(gazeGrid1[1][1] * 10) / 10;
+  const gazeEye2 = Math.round(gazeGrid2[1][1] * 10) / 10;
+  const gazeEyeDiff = Math.round((gazeEye2 - gazeEye1) * 10) / 10;
+
+  const gazeOffDir1 = dominantOffCenter(gazeGrid1);
+  const gazeOffDir2 = dominantOffCenter(gazeGrid2);
+
+  const poseByLabel1 = refiner1.refined_result.details.negative_posture_analysis.negative_posture_by_label;
+  const poseByLabel2 = refiner2.refined_result.details.negative_posture_analysis.negative_posture_by_label;
+
+  const allPoseLabels = Array.from(new Set([...poseByLabel1.map(i => i.label), ...poseByLabel2.map(i => i.label)]));
+  const poseBarData = allPoseLabels.map(label => ({
+    name: POSE_LABEL_KO[label] ?? label,
+    '1회차': Math.round((poseByLabel1.find(i => i.label === label)?.duration_sec ?? 0) * 10) / 10,
+    '2회차': Math.round((poseByLabel2.find(i => i.label === label)?.duration_sec ?? 0) * 10) / 10,
+  }));
+
+  // ── 레이더 차트 + 자가 체크리스트 공용 ────────────────────────────────────
   const a1d = attempt1Data as any;
   const a2d = attempt2Data as any;
+  const radarData = [
+    { metric: '발화 속도',    '1회차': toSpeechLevel(attempt1Data.speechRate),              '2회차': toSpeechLevel(attempt2Data.speechRate) },
+    { metric: '피치 변화폭',  '1회차': toPitchLevel(a1d.pitchVariation ?? 75),             '2회차': toPitchLevel(a2d.pitchVariation ?? 75) },
+    { metric: '후반부 말속도', '1회차': toLateSpeedLevel(a1d.lateSpeedRatio ?? 1.05),      '2회차': toLateSpeedLevel(a2d.lateSpeedRatio ?? 1.02) },
+    { metric: '자세 안정성',  '1회차': toPostureLevel(a1d.negativePoseDurationRatio ?? 0.20), '2회차': toPostureLevel(a2d.negativePoseDurationRatio ?? 0.08) },
+    { metric: '정면 응시',    '1회차': toEyeLevel(attempt1Data.eyeContact),                '2회차': toEyeLevel(attempt2Data.eyeContact) },
+    { metric: '발표 시간',    '1회차': toDurationLevel(dur1, timeLimitSeconds),            '2회차': toDurationLevel(dur2, timeLimitSeconds) },
+  ];
 
   const ALL_METRICS = [
     { metric_key: 'speechRate',                label: '발화 속도',    category: 'voice'    as const },
@@ -336,7 +516,7 @@ export default function ComparisonPage() {
     const r1 = getAttemptResult(metric.metric_key, a1d, timeLimitSeconds, isDur ? dur1 : undefined);
     const r2 = getAttemptResult(metric.metric_key, a2d, timeLimitSeconds, isDur ? dur2 : undefined);
     const compSentence = getComparisonSentence(metric.metric_key, a1d, a2d, timeLimitSeconds, isDur ? dur1 : undefined, isDur ? dur2 : undefined);
-    return { metric, r1, r2, compSentence, status: levelToStatus(r1.level, r2.level) };
+    return { metric, r1, r2, compSentence };
   });
 
 
@@ -447,9 +627,9 @@ export default function ComparisonPage() {
 
             <div className="border-t border-slate-100 mx-5" />
 
-            {/* KPI 비교 */}
+            {/* 주요 지표 비교 */}
             <div className="p-5">
-              <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-4">KPI 비교</h3>
+              <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-4">주요 지표 비교</h3>
               <div className="grid grid-cols-3 gap-3">
                 <KPICompareCard
                   label="발화 속도" unit="음절/분"
@@ -474,10 +654,121 @@ export default function ComparisonPage() {
 
             <div className="border-t border-slate-100 mx-5" />
 
+            {/* 시선 분포 비교 */}
+            <div className="p-5">
+              <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-1">정면 응시 분포</h3>
+              <p className="text-base text-slate-500 mb-4">
+                발표 중 시선이 화면의 어느 방향에 머물렀는지 보여줍니다. 가운데(정면)가 높을수록 좋아요.
+              </p>
+              <GazeComparisonGrid grid1={gazeGrid1} grid2={gazeGrid2} />
+
+              {/* 인사이트 */}
+              {(() => {
+                const improved = gazeEyeDiff >= 3;
+                const worsened = gazeEyeDiff <= -3;
+
+                const theme = improved
+                  ? { wrap: 'bg-green-50 border-green-200', title: 'text-green-700', iconBg: 'bg-green-100', iconCls: 'text-green-600' }
+                  : worsened
+                  ? { wrap: 'bg-red-50 border-red-200',     title: 'text-red-600',   iconBg: 'bg-red-100',   iconCls: 'text-red-500'   }
+                  : { wrap: 'bg-slate-50 border-slate-200', title: 'text-slate-600', iconBg: 'bg-slate-100', iconCls: 'text-slate-400' };
+
+                const title = improved
+                  ? `정면 응시가 ${gazeEye1}% → ${gazeEye2}%로 ${gazeEyeDiff}%p 개선됐어요.`
+                  : worsened
+                  ? `정면 응시가 ${gazeEye1}% → ${gazeEye2}%로 ${Math.abs(gazeEyeDiff)}%p 줄었어요.`
+                  : `정면 응시 비율이 두 회차 모두 비슷했어요. (${gazeEye1}% → ${gazeEye2}%)`;
+
+                const detail = improved
+                  ? gazeOffDir1
+                    ? `1회차에서 ${gazeOffDir1}으로 향하던 시선이 2회차에서 정면으로 잡혔어요.`
+                    : `시선이 화면 중앙에 안정적으로 집중되고 있어요.`
+                  : worsened
+                  ? gazeOffDir2
+                    ? `2회차에서 시선이 ${gazeOffDir2}으로 분산되는 경향이 있었어요. 발표 중 의도적으로 카메라를 바라보는 연습이 필요해요.`
+                    : `발표 중 의도적으로 카메라를 바라보는 연습이 필요해요.`
+                  : gazeEye2 >= 80
+                  ? `두 회차 모두 시선이 안정적으로 유지되고 있어요.`
+                  : gazeEye2 >= 60
+                  ? `양호한 수준이에요. 정면 응시를 조금 더 늘리면 청중과의 연결감이 높아져요.`
+                  : `두 회차 모두 정면 응시가 부족했어요. 카메라를 의식적으로 바라보는 연습을 해보세요.`;
+
+                return (
+                  <div className={`mt-4 rounded-xl px-4 py-3 border text-sm flex gap-3 items-start ${theme.wrap}`}>
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${theme.iconBg}`}>
+                      {improved
+                        ? <CheckCircle className={`w-4 h-4 ${theme.iconCls}`} />
+                        : worsened
+                        ? <XCircle className={`w-4 h-4 ${theme.iconCls}`} />
+                        : <span className={`text-sm font-bold leading-none ${theme.iconCls}`}>~</span>
+                      }
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <p className={`font-semibold ${theme.title}`}>{title}</p>
+                      <p className="text-slate-500">{detail}</p>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="border-t border-slate-100 mx-5" />
+
+            {/* 부정 자세 비교 */}
+            <div className="p-5">
+              <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-1">부정 자세 비교</h3>
+              <p className="text-base text-slate-500 mb-4">자세 유형별 지속 시간을 비교합니다.</p>
+              {poseBarData.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-6">감지된 부정 자세가 없어요.</p>
+              ) : (() => {
+                const maxDur = Math.max(...poseBarData.flatMap(d => [d['1회차'], d['2회차']]), 0.1);
+                const rows = [
+                  { key: '1회차' as const, color: 'bg-indigo-500' },
+                  { key: '2회차' as const, color: 'bg-emerald-500' },
+                ];
+                return (
+                  <div className="flex flex-col gap-5">
+                    {poseBarData.map(item => (
+                      <div key={item.name}>
+                        <p className="text-sm font-bold text-slate-700 mb-2">{item.name}</p>
+                        <div className="flex flex-col gap-1.5">
+                          {rows.map(({ key, color }) => {
+                            const val = item[key];
+                            const pct = Math.round((val / maxDur) * 100);
+                            const isEmpty = val === 0;
+                            return (
+                              <div key={key} className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-slate-400 w-9 flex-shrink-0">{key}</span>
+                                {isEmpty ? (
+                                  <span className="text-xs text-slate-300 font-medium">없음</span>
+                                ) : (
+                                  <>
+                                    <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden">
+                                      <div
+                                        className={`h-full rounded-full ${color}`}
+                                        style={{ width: `${pct}%`, minWidth: '6px' }}
+                                      />
+                                    </div>
+                                    <span className="text-xs font-semibold text-slate-500 w-10 text-right flex-shrink-0">{val}s</span>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="border-t border-slate-100 mx-5" />
+
             {/* 자가 체크리스트 */}
             <div className="p-5">
               <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-1">자가 체크리스트 비교</h3>
-              <p className="text-sm text-slate-500 mb-4">6개 항목 전체를 비교합니다. 개선이 필요한 항목에는 체크박스가 활성화됩니다.</p>
+              <p className="text-base text-slate-500 mb-4">6개 항목 전체를 비교합니다. 개선이 필요한 항목에는 체크박스가 활성화됩니다.</p>
               <div className="space-y-3">
                 {fullChecklist.map(({ metric, r1, r2, compSentence }, idx) => {
                   // 카드 테두리: 2회차 레벨 기준
@@ -486,37 +777,8 @@ export default function ComparisonPage() {
                     r2.level === 2                  ? 'border-orange-200' :
                     r2.level === 1                  ? 'border-red-200'    : 'border-slate-200';
 
-                  const CheckIcon = ({ level }: { level: number }) => {
-                    if (level === 1) return <XCircle className="w-4 h-4 text-red-500" />;
-                    if (level === 2) return <AlertTriangle className="w-4 h-4 text-orange-400" />;
-                    return <div className="w-4 h-4 rounded-full border-2 border-slate-200" />;
-                  };
-                  const checkLabel = (level: number) =>
-                    level === 1 ? { text: '개선 필요', cls: 'text-red-600' } :
-                    level === 2 ? { text: '주의',      cls: 'text-orange-500' } :
-                                  { text: '적정',      cls: 'text-slate-400' };
                   const l1 = checkLabel(r1.level);
                   const l2 = checkLabel(r2.level);
-
-                  // 헤더 배지: 적정→적정이면 없음, 적정 도달이면 개선됨, 아니면 2회차 레벨 표시
-                  const HeaderBadge = () => {
-                    if (r2.level === 3 && r1.level === 3) return null;
-                    if (r2.level === 3) return (
-                      <div className="flex items-center gap-1 text-green-700 font-semibold text-sm flex-shrink-0">
-                        <CheckCircle className="w-4 h-4" /><span>개선됨</span>
-                      </div>
-                    );
-                    if (r2.level === 2) return (
-                      <div className="flex items-center gap-1 text-orange-500 font-semibold text-sm flex-shrink-0">
-                        <AlertTriangle className="w-4 h-4" /><span>주의</span>
-                      </div>
-                    );
-                    return (
-                      <div className="flex items-center gap-1 text-red-600 font-semibold text-sm flex-shrink-0">
-                        <XCircle className="w-4 h-4" /><span>개선필요</span>
-                      </div>
-                    );
-                  };
 
                   return (
                     <div key={idx} className={`rounded-xl border bg-white overflow-hidden ${borderCls}`}>
@@ -526,7 +788,7 @@ export default function ComparisonPage() {
                           {CATEGORY_STYLE[metric.category].label}
                         </span>
                         <p className="text-sm font-semibold text-slate-800 flex-1 leading-snug">{compSentence}</p>
-                        <HeaderBadge />
+                        <HeaderBadge level1={r1.level} level2={r2.level} />
                       </div>
 
                       {/* 1회차 / 2회차 비교 행 */}
