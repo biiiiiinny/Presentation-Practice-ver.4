@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Upload, Video, X, Presentation, Target, Users, Clock, MessageSquare, CheckCircle } from 'lucide-react';
+import { Upload, Video, X, Presentation, /* Target, Users, */ Clock, MessageSquare, CheckCircle } from 'lucide-react';
 
 interface PresentationSetupProps {
   onSubmit: (data: any) => void;
@@ -36,13 +36,13 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
     { value: 'proposal', label: '제안발표', icon: '🎯' }
   ];
 
-  const criteriaOptions = [
-    { value: 'accuracy', label: '정확성' },
-    { value: 'logic', label: '논리성' },
-    { value: 'delivery', label: '전달력' }
-  ];
+  // const criteriaOptions = [
+  //   { value: 'accuracy', label: '정확성' },
+  //   { value: 'logic', label: '논리성' },
+  //   { value: 'delivery', label: '전달력' }
+  // ];
 
-  const [hiddenCriteria, setHiddenCriteria] = useState<string[]>([]);
+  // const [hiddenCriteria, setHiddenCriteria] = useState<string[]>([]);
 
   // existingFormData가 변경될 때 formData를 리셋
   useEffect(() => {
@@ -54,15 +54,15 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
       timeLimit: existingFormData?.timeLimit || '',
       feedbackTone: existingFormData?.feedbackTone || ''
     });
-    setHiddenCriteria([]);
+    // setHiddenCriteria([]);
   }, [existingFormData]);
 
-  const knowledgeLevels = [
-    { value: 'none', label: '없음', desc: '처음 듣는 주제' },
-    { value: 'low', label: '적음', desc: '기초 지식 보유' },
-    { value: 'medium', label: '보통', desc: '일반적 이해' },
-    { value: 'high', label: '많음', desc: '전문가 수준' }
-  ];
+  // const knowledgeLevels = [
+  //   { value: 'none', label: '없음', desc: '처음 듣는 주제' },
+  //   { value: 'low', label: '적음', desc: '기초 지식 보유' },
+  //   { value: 'medium', label: '보통', desc: '일반적 이해' },
+  //   { value: 'high', label: '많음', desc: '전문가 수준' }
+  // ];
 
   const feedbackTones = [
     { value: 'default', label: '기본', icon: '😊', desc: '균형잡힌 피드백' },
@@ -145,32 +145,26 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
     onSubmit({ ...formData, videoFile });
   };
 
-  const handleCriteriaChange = (criterion: string, value: string) => {
-    const numValue = parseInt(value) || 0;
-    setFormData(prev => ({
-      ...prev,
-      criteria: {
-        ...prev.criteria,
-        [criterion]: numValue
-      }
-    }));
-  };
+  // const handleCriteriaChange = (criterion: string, value: string) => {
+  //   const numValue = parseInt(value) || 0;
+  //   setFormData(prev => ({
+  //     ...prev,
+  //     criteria: { ...prev.criteria, [criterion]: numValue }
+  //   }));
+  // };
 
-  const getTotalScore = () => {
-    return (Object.values(formData.criteria) as number[]).reduce((sum: number, score: number) => sum + score, 0);
-  };
+  // const getTotalScore = () => {
+  //   return (Object.values(formData.criteria) as number[]).reduce((sum: number, score: number) => sum + score, 0);
+  // };
 
-  const removeBasicCriteria = (criterionValue: string) => {
-    setHiddenCriteria(prev => [...prev, criterionValue]);
-    setFormData(prev => {
-      const newCriteria = { ...prev.criteria };
-      delete newCriteria[criterionValue];
-      return {
-        ...prev,
-        criteria: newCriteria
-      };
-    });
-  };
+  // const removeBasicCriteria = (criterionValue: string) => {
+  //   setHiddenCriteria(prev => [...prev, criterionValue]);
+  //   setFormData(prev => {
+  //     const newCriteria = { ...prev.criteria };
+  //     delete newCriteria[criterionValue];
+  //     return { ...prev, criteria: newCriteria };
+  //   });
+  // };
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -348,99 +342,17 @@ export function PresentationSetup({ onSubmit, existingFormData, isRetry = false 
             </div>
           </div>
 
-          {/* 평가 기준 */}
+          {/* 평가 기준 — 비활성화
           <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
-            <div className="flex items-center gap-3 mb-4">
-              <Target className="w-6 h-6 text-purple-600" />
-              <h2 className="text-xl font-bold text-slate-900">발표 평가 기준</h2>
-              <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">선택사항</span>
-              {isRetry && <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">이전 설정 유지</span>}
-            </div>
-            <p className="text-sm text-slate-600 mb-4">
-              각 평가 기준의 비중을 입력하세요 (총합 100점, 입력하지 않으면 기본 기준 적용)
-            </p>
-            <div className="space-y-3 mb-4">
-              {criteriaOptions
-                .filter(option => !hiddenCriteria.includes(option.value))
-                .map((option) => (
-                <div key={option.value} className="flex items-center gap-3">
-                  <label className="flex-1 text-sm font-medium text-slate-700">
-                    {option.label}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.criteria[option.value] || ''}
-                    onChange={(e) => handleCriteriaChange(option.value, e.target.value)}
-                    placeholder="0"
-                    disabled={isRetry}
-                    className={`w-20 px-3 py-2 border border-slate-300 rounded-lg outline-none text-center ${
-                      isRetry
-                        ? 'bg-slate-100 cursor-not-allowed'
-                        : 'focus:ring-2 focus:ring-purple-500 focus:border-transparent'
-                    }`}
-                  />
-                  <span className="text-slate-600 text-sm w-6">점</span>
-                  <button
-                    type="button"
-                    onClick={() => removeBasicCriteria(option.value)}
-                    disabled={isRetry}
-                    className={`px-3 py-2 border border-slate-300 rounded-lg text-sm transition-all ${
-                      isRetry
-                        ? 'bg-slate-100 cursor-not-allowed text-slate-400'
-                        : 'hover:bg-red-50 hover:border-red-300 hover:text-red-700'
-                    }`}
-                  >
-                    삭제
-                  </button>
-                </div>
-              ))}
-            </div>
-            <div className={`p-3 rounded-lg text-center font-semibold ${
-              getTotalScore() === 100 
-                ? 'bg-green-100 text-green-700 border border-green-300' 
-                : getTotalScore() === 0
-                ? 'bg-slate-100 text-slate-600 border border-slate-300'
-                : 'bg-orange-100 text-orange-700 border border-orange-300'
-            }`}>
-              {getTotalScore() === 0 ? '기본 기준으로 평가됩니다' : `총합: ${getTotalScore()} / 100점`}
-            </div>
+            ...
           </div>
+          */}
 
-          {/* 청중 배경지식 */}
+          {/* 청중 배경지식 — 비활성화
           <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
-            <div className="flex items-center gap-3 mb-4">
-              <Users className="w-6 h-6 text-green-600" />
-              <h2 className="text-xl font-bold text-slate-900">예상 청중의 배경지식</h2>
-              <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">선택사항</span>
-              {isRetry && <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">이전 설정 유지</span>}
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {knowledgeLevels.map((level) => (
-                <button
-                  key={level.value}
-                  type="button"
-                  onClick={() => !isRetry && setFormData({ ...formData, audienceKnowledge: level.value })}
-                  disabled={isRetry}
-                  className={`p-4 rounded-lg border-2 transition-all text-left ${
-                    formData.audienceKnowledge === level.value
-                      ? 'border-green-500 bg-green-50 shadow-md'
-                      : isRetry
-                      ? 'border-slate-200 bg-slate-100 cursor-not-allowed'
-                      : 'border-slate-200 hover:border-green-300 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="font-semibold text-slate-900 mb-1">
-                    {level.label}
-                  </div>
-                  <div className="text-xs text-slate-600">
-                    {level.desc}
-                  </div>
-                </button>
-              ))}
-            </div>
+            ...
           </div>
+          */}
 
           {/* 제한시간 & 피드백 말투 */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
