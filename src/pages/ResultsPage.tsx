@@ -4,7 +4,7 @@ import type { ChecklistItem } from '../contexts/AppContext';
 import { useState, useEffect, useRef } from 'react';
 import { Timeline } from '../components/Timeline';
 import { VideoPlayer } from '../components/VideoPlayer';
-import { Mic, User, ChevronDown, ChevronUp } from 'lucide-react';
+import { Mic, User, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip as RechartsTooltip,
@@ -376,28 +376,40 @@ export function generateMockChecklist(ar: {
     return m > 0 ? `${m}분 ${sec}초` : `${sec}초`;
   };
 
+  // 발화 속도
   if (ar.speechRate < 270 || ar.speechRate > 330)
     items.push({ id: 'speechRate', category: 'voice', metric_key: 'speechRate',
       condition: 'in_range', target_min: 270, target_max: 330, is_completed: false,
-      label: ar.speechRate > 330 ? `발화 속도가 ${ar.speechRate} CPM으로 빠른 편이에요.` : `발화 속도가 ${ar.speechRate} CPM으로 느린 편이에요.`,
+      label: ar.speechRate > 330 ? `발화 속도가 ${ar.speechRate}자/분으로 빠른 편이에요.` : `발화 속도가 ${ar.speechRate} 자/분으로 느린 편이에요.`,
       fact: ar.speechRate > 330
-        ? `발화 속도가 ${ar.speechRate} CPM으로 적정 범위(270–330 CPM)보다 빠르게 측정됐어요.`
-        : `발화 속도가 ${ar.speechRate} CPM으로 적정 범위(270–330 CPM)보다 느리게 측정됐어요.`,
+        ? `발화 속도가 ${ar.speechRate} 자/분으로 적정 범위(270–330자/분)보다 빠르게 측정됐어요.`
+        : `발화 속도가 ${ar.speechRate} 자/분으로 적정 범위(270–330자/분)보다 느리게 측정됐어요.`,
       tip: ar.speechRate > 330
         ? `문장 사이에 짧게 멈추는 연습을 하면 청중이 내용을 더 잘 이해할 수 있어요.`
         : `핵심 내용을 읽어보는 연습을 통해 자연스럽게 속도를 높이면 발표에 집중력이 생겨요.` });
+  else
+    items.push({ id: 'speechRate', category: 'voice', metric_key: 'speechRate', is_completed: false,
+      label: `발화 속도가 ${ar.speechRate}자/분으로 적정해요.`,
+      fact: `발화 속도가 ${ar.speechRate}자/분으로 청중이 따라오기 좋은 속도였어요.` });
 
-  if (ar.pitchVariation < 70 || ar.pitchVariation > 90)
+  // 피치 변화폭
+  const pitchVal = ar.pitchVariation ?? 75;
+  if (pitchVal < 70 || pitchVal > 90)
     items.push({ id: 'pitchVariation', category: 'voice', metric_key: 'pitchVariation',
       condition: 'in_range', target_min: 70, target_max: 90, is_completed: false,
-      label: ar.pitchVariation < 70 ? `피치 변화폭이 ${ar.pitchVariation} Hz로 단조로운 편이에요.` : `피치 변화폭이 ${ar.pitchVariation} Hz로 변화가 과한 편이에요.`,
-      fact: ar.pitchVariation < 70
-        ? `피치 변화폭이 ${ar.pitchVariation} Hz로 목소리가 전반적으로 단조롭게 유지됐어요.`
-        : `피치 변화폭이 ${ar.pitchVariation} Hz로 목소리 변화가 다소 불규칙했어요.`,
-      tip: ar.pitchVariation < 70
+      label: pitchVal < 70 ? `피치 변화폭이 ${pitchVal}Hz로 단조로운 편이에요.` : `피치 변화폭이 ${pitchVal} Hz로 변화가 과한 편이에요.`,
+      fact: pitchVal < 70
+        ? `피치 변화폭이 ${pitchVal}Hz로 목소리가 전반적으로 단조롭게 유지됐어요.`
+        : `피치 변화폭이 ${pitchVal}Hz로 목소리 변화가 다소 불규칙했어요.`,
+      tip: pitchVal < 70
         ? `중요한 단어에서 의식적으로 목소리를 높이면 청중의 집중도를 끌어올릴 수 있어요.`
         : `주요 포인트 외에는 일정한 톤을 유지하면 더 안정적이고 신뢰감 있게 들려요.` });
+  else
+    items.push({ id: 'pitchVariation', category: 'voice', metric_key: 'pitchVariation', is_completed: false,
+      label: `피치 변화폭이 ${pitchVal}Hz로 적절해요.`,
+      fact: `피치 변화폭이 ${pitchVal}Hz로 목소리 높낮이가 자연스럽게 유지됐어요.` });
 
+  // 후반부 말속도
   const lateRatio = ar.lateSpeedRatio ?? 1.0;
   if (Math.abs(lateRatio - 1.0) > 0.05) {
     const diffPct = Math.round(Math.abs(lateRatio - 1.0) * 100);
@@ -410,8 +422,12 @@ export function generateMockChecklist(ar: {
       tip: lateRatio > 1.0
         ? `발표 마지막 부분에서 의식적으로 천천히 말하면 마무리가 더 깔끔하게 전달돼요.`
         : `후반부에 핵심 내용을 짧게 요약하는 연습을 하면 긴장감 없이 속도를 유지할 수 있어요.` });
-  }
+  } else
+    items.push({ id: 'lateSpeed', category: 'voice', metric_key: 'lateSpeedRatio', is_completed: false,
+      label: `후반부 발화 속도가 일정하게 유지됐어요.`,
+      fact: `후반부에도 일정한 발화 속도를 유지했어요.` });
 
+  // 자세 안정성
   const poseRatio = ar.negativePoseDurationRatio ?? 0;
   if (poseRatio >= 0.10)
     items.push({ id: 'posture', category: 'posture', metric_key: 'negativePoseDurationRatio',
@@ -423,7 +439,12 @@ export function generateMockChecklist(ar: {
       tip: poseRatio > 0.25
         ? `발표 전 어깨를 펴고 발 너비를 어깨 폭으로 벌려 서는 자세를 습관화하면 자연스럽게 안정돼요.`
         : `녹화 영상을 보며 어느 순간 자세가 무너지는지 확인하고 그 구간을 집중적으로 연습해보세요.` });
+  else
+    items.push({ id: 'posture', category: 'posture', metric_key: 'negativePoseDurationRatio', is_completed: false,
+      label: `발표 내내 자세가 안정적이었어요.`,
+      fact: `발표 내내 안정적인 자세를 유지했어요.` });
 
+  // 정면 응시
   if (ar.eyeContact < 70)
     items.push({ id: 'eyeContact', category: 'posture', metric_key: 'eyeContact',
       condition: 'gte', target_min: 70, is_completed: false,
@@ -434,7 +455,12 @@ export function generateMockChecklist(ar: {
       tip: ar.eyeContact < 50
         ? `카메라 위에 작은 메모지를 붙여두고 연습하면 자연스럽게 정면을 바라보는 습관이 생겨요.`
         : `슬라이드를 읽는 대신 키워드만 적어두면 청중을 바라보며 말하는 시간이 늘어나요.` });
+  else
+    items.push({ id: 'eyeContact', category: 'posture', metric_key: 'eyeContact', is_completed: false,
+      label: `정면 응시 비율이 ${ar.eyeContact}%로 충분했어요.`,
+      fact: `정면 응시 비율이 ${ar.eyeContact}%로 청중과 충분히 눈을 맞추며 발표했어요.` });
 
+  // 발표 시간
   if (ar.durationSec !== undefined && ar.timeLimitSec && ar.timeLimitSec > 0) {
     const diff = ar.durationSec - ar.timeLimitSec;
     if (Math.abs(diff) > ar.timeLimitSec * 0.10)
@@ -447,6 +473,15 @@ export function generateMockChecklist(ar: {
         tip: diff > 0
           ? `각 섹션에 시간을 배분하고 미리 타이머를 켜두고 연습하면 자연스럽게 시간 안에 마칠 수 있어요.`
           : `핵심 포인트마다 예시나 부연 설명을 한 문장씩 추가하면 내용이 더 풍부해지고 시간도 채워져요.` });
+    else {
+      const fmtAbs = (s: number) => {
+        const m = Math.floor(s / 60), sec = Math.round(s % 60);
+        return sec > 0 ? `${m}분 ${sec}초` : `${m}분`;
+      };
+      items.push({ id: 'duration', category: 'voice', metric_key: 'durationSec', is_completed: false,
+        label: `발표 시간을 적절히 활용했어요.`,
+        fact: `${fmtAbs(ar.durationSec)} 발표로 제한시간 ${fmtAbs(ar.timeLimitSec!)}을 여유롭게 마쳤어요.` });
+    }
   }
 
   return items;
@@ -482,32 +517,52 @@ function ChecklistPanel({
       <div className="space-y-2">
         {items.map(item => {
           const cat = CATEGORY_STYLE[item.category];
+          // 잘한 항목 (tip 없음): 체크박스·팁 없이 결과 문장만 표시
+          if (!item.tip) {
+            return (
+              <div key={item.id} className="flex items-center gap-2 p-3 rounded-lg border bg-slate-50 border-slate-200">
+                <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${cat.cls}`}>
+                  {cat.label}
+                </span>
+                <p className="text-sm leading-snug flex-1 min-w-0 text-slate-700">
+                  {item.fact ?? item.label}
+                </p>
+              </div>
+            );
+          }
+          // 개선 필요 항목이지만 체크됨: CheckCircle 아이콘으로 표시
+          if (item.is_completed) {
+            return (
+              <div key={item.id} className="flex items-center gap-2 p-3 rounded-lg border bg-green-50 border-green-200">
+                <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+                <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${cat.cls}`}>
+                  {cat.label}
+                </span>
+                <p className="text-sm leading-snug flex-1 min-w-0 text-green-800 line-through decoration-green-400">
+                  {item.fact ?? item.label}
+                </p>
+              </div>
+            );
+          }
+          // 개선 필요 항목 미체크: 체크박스 + 팁 표시
           return (
             <label key={item.id}
-              className={`flex flex-col gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${
-                item.is_completed
-                  ? 'bg-green-50 border-green-200'
-                  : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
-              }`}>
+              className="flex flex-col gap-2 p-3 rounded-lg border cursor-pointer transition-colors bg-slate-50 border-slate-200 hover:bg-slate-100">
               <div className="flex items-center gap-2">
-                <input type="checkbox" checked={item.is_completed}
+                <input type="checkbox" checked={false}
                   onChange={() => onToggle(item.id)}
                   className="accent-green-600 shrink-0" />
                 <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${cat.cls}`}>
                   {cat.label}
                 </span>
-                <p className={`text-sm leading-snug flex-1 min-w-0 ${
-                  item.is_completed ? 'text-green-800 line-through decoration-green-400' : 'text-slate-800'
-                }`}>
+                <p className="text-sm leading-snug flex-1 min-w-0 text-slate-800">
                   {item.fact ?? item.label}
                 </p>
               </div>
-              {item.tip && !item.is_completed && (
-                <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
-                  <span className="text-sm flex-shrink-0">💡</span>
-                  <p className="text-xs text-amber-800 leading-relaxed">{item.tip}</p>
-                </div>
-              )}
+              <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
+                <span className="text-sm flex-shrink-0">💡</span>
+                <p className="text-xs text-amber-800 leading-relaxed">{item.tip}</p>
+              </div>
             </label>
           );
         })}
@@ -628,34 +683,41 @@ export default function ResultsPage() {
   // 체크리스트 초기화: 저장된 데이터 있으면 불러오고, 없으면 분석 결과로 생성
   useEffect(() => {
     if (!currentAttempt) return;
-    if (currentAttempt.checklist) {
-      setChecklistItems(currentAttempt.checklist);
-    } else {
-      const gazeM = (currentAttempt.analysisResults as any)?.gazeResult?.gaze_metrics
-        ?? gazeResult.gaze_metrics;
-      const eyeContactVal = Math.round((gazeM.grid_percent as number[][])[1][1] * 10) / 10;
-      const ar = currentAttempt.analysisResults as any ?? {};
-      const negPoseRatio = ar.negativePoseDurationRatio
-        ?? refinerResult.refined_result.details.negative_posture_analysis.negative_posture_duration_ratio;
-      const lateRatio = ar.lateSpeedRatio
-        ?? (refinerResult.refined_result.details.late_speech_rate_analysis.late_average_cpm
-            / refinerResult.refined_result.details.late_speech_rate_analysis.overall_average_cpm);
+    const gazeM = (currentAttempt.analysisResults as any)?.gazeResult?.gaze_metrics
+      ?? gazeResult.gaze_metrics;
+    const eyeContactVal = Math.round((gazeM.grid_percent as number[][])[1][1] * 10) / 10;
+    const ar = currentAttempt.analysisResults as any ?? {};
+    const negPoseRatio = ar.negativePoseDurationRatio
+      ?? refinerResult.refined_result.details.negative_posture_analysis.negative_posture_duration_ratio;
+    const lateRatio = ar.lateSpeedRatio
+      ?? (refinerResult.refined_result.details.late_speech_rate_analysis.late_average_cpm
+          / refinerResult.refined_result.details.late_speech_rate_analysis.overall_average_cpm);
+    // videoDuration(실제 영상 길이)을 우선 사용, 없으면 분석 데이터의 duration으로 폴백
+    const durFallback = (() => {
       const durStr: string = ar.duration ?? '0:00';
       const [dm, ds] = durStr.split(':').map(Number);
-      const durationSec = dm * 60 + (ds || 0);
-      const timeLimitSec = currentSession?.formData?.timeLimit
-        ? parseInt(currentSession.formData.timeLimit) * 60 : 0;
-      setChecklistItems(generateMockChecklist({
-        speechRate: ar.speechRate ?? 300,
-        eyeContact: eyeContactVal,
-        pitchVariation: ar.pitchVariation ?? 75,
-        lateSpeedRatio: lateRatio,
-        negativePoseDurationRatio: negPoseRatio,
-        durationSec: durationSec > 0 ? durationSec : undefined,
-        timeLimitSec: timeLimitSec > 0 ? timeLimitSec : undefined,
-      }));
-    }
-  }, [currentAttempt?.id]);
+      return dm * 60 + (ds || 0);
+    })();
+    const durationSec = videoDuration ?? durFallback;
+    const timeLimitSec = currentSession?.formData?.timeLimit
+      ? parseInt(currentSession.formData.timeLimit) * 60 : 0;
+    // 항상 현재 분석 데이터 기준으로 재생성 → 개선이 필요한 항목만 남음
+    const generated = generateMockChecklist({
+      speechRate: ar.speechRate ?? 300,
+      eyeContact: eyeContactVal,
+      pitchVariation: ar.pitchVariation ?? 75,
+      lateSpeedRatio: lateRatio,
+      negativePoseDurationRatio: negPoseRatio,
+      durationSec: durationSec > 0 ? durationSec : undefined,
+      timeLimitSec: timeLimitSec > 0 ? timeLimitSec : undefined,
+    });
+    // 저장된 체크 상태(is_completed)만 복원
+    const saved = currentAttempt.checklist ?? [];
+    setChecklistItems(generated.map(item => ({
+      ...item,
+      is_completed: saved.find(s => s.id === item.id)?.is_completed ?? false,
+    })));
+  }, [currentAttempt?.id, videoDuration]);
 
   useEffect(() => {
     const url = currentAttempt?.videoUrl;
@@ -870,13 +932,13 @@ export default function ResultsPage() {
 
               {/* 종합 평가 — 가장 먼저 보여주는 핵심 피드백 */}
               <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-slate-50 p-5 shadow-sm">
-                <h3 className="text-lg font-bold text-slate-900 mb-3">종합 평가</h3>
-                <p className="text-base text-slate-700 leading-relaxed">
+                <h3 className="text-sm font-bold text-slate-900 mb-2">종합 평가</h3>
+                <p className="text-sm text-slate-700 leading-relaxed">
                   {presentationSummary.overall_comment}
                 </p>
               </div>
 
-              <h3 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-blue-900">6가지 지표 요약</h3>
+              <h3 className="text-sm font-bold text-slate-900 pl-3 border-l-4 border-blue-900">6가지 지표 요약</h3>
 
               <ResponsiveContainer width="100%" height={260}>
                 <RadarChart data={radarData} outerRadius="68%" margin={{ top: 15, right: 40, bottom: 15, left: 40 }}>
@@ -966,7 +1028,7 @@ export default function ResultsPage() {
               })()}
 
               <div className="space-y-3">
-                <h4 className="text-base font-bold text-slate-900 pl-3 border-l-4 border-blue-900">자가 체크리스트</h4>
+                <h4 className="text-sm font-bold text-slate-900 pl-3 border-l-4 border-blue-900">자가 체크리스트</h4>
                 <ChecklistPanel
                   items={checklistItems}
                   onToggle={handleToggleChecklist}
@@ -1045,11 +1107,11 @@ export default function ResultsPage() {
                     <div className="space-y-2.5">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-slate-500">전체 평균</span>
-                        <span className="font-bold text-slate-800">{overall_average_cpm.toFixed(1)} CPM</span>
+                        <span className="font-bold text-slate-800">{overall_average_cpm.toFixed(1)} 자/분</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-slate-500">후반부 평균 <span className="text-slate-400 font-normal">({fmtTime(late_section_start_sec)} ~ )</span></span>
-                        <span className="font-bold text-slate-800">{late_average_cpm.toFixed(1)} CPM</span>
+                        <span className="font-bold text-slate-800">{late_average_cpm.toFixed(1)} 자/분</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-slate-500">전체 대비 변화율</span>
