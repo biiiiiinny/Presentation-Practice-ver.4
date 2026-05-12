@@ -10,12 +10,19 @@ import {
   ResponsiveContainer, Tooltip as RechartsTooltip,
   ComposedChart, Area, XAxis, YAxis, CartesianGrid, ReferenceLine, ReferenceArea,
 } from 'recharts';
-import pitchExample from '../../json_examples/pitch_example.json';
-import presentationSummary from '../../json_examples/presentation_summary.json';
-import poseData from '../../json_examples/pose.json';
-import refinerData from '../../json_examples/refiner.json';
-import refinerResult from '../../json_examples/refiner_result.json';
-import gazeResult from '../../json_examples/gaze_result.json';
+import mockSttResult1 from '../../json_examples/1회차 결과 json/stt_1.json';
+import mockPitchResult1 from '../../json_examples/1회차 결과 json/pitch_1.json';
+import mockLlmResult1 from '../../json_examples/1회차 결과 json/llm_1.json';
+import mockPoseResult1 from '../../json_examples/1회차 결과 json/pose_1.json';
+import mockRefinerResult1 from '../../json_examples/1회차 결과 json/refiner_1.json';
+import mockGazeResult1 from '../../json_examples/1회차 결과 json/gaze_1.json';
+import mockSttResult2 from '../../json_examples/2회차 결과 json/stt_2.json';
+import mockPitchResult2 from '../../json_examples/2회차 결과 json/pitch_2.json';
+import mockLlmResult2 from '../../json_examples/2회차 결과 json/llm_2.json';
+import mockPoseResult2 from '../../json_examples/2회차 결과 json/pose_2.json';
+import mockRefinerResult2 from '../../json_examples/2회차 결과 json/refiner_2.json';
+import mockGazeResult2 from '../../json_examples/2회차 결과 json/gaze_2.json';
+import type { SttResult, PitchResult, LlmResult, PoseResult, RefinerResult, GazeResult } from '../contexts/AppContext';
 
 
 // ── 범위 게이지 ───────────────────────────────────────────────────────────────
@@ -114,24 +121,20 @@ export interface PresentationSection {
   end: number;
 }
 
-// 피치 타임라인 + baseRate 로 mock 발화속도 생성
-// 백엔드 연동 시 이 함수를 사용하지 않고 실제 timeline 배열을 사용
+// 피치 segment + stt segment 로 실제 cpm 매핑
+// 두 배열의 start가 동일함
 function buildCombinedTimeline(
-  pitchTimeline: { start: number; mean_hz: number }[],
-  baseRate: number,
+  pitchSegments: { start: number; mean_hz: number }[],
+  sttSegments: { start: number; cpm: number }[],
 ): PresentationPoint[] {
-  const n = pitchTimeline.length;
-  return pitchTimeline.map(({ start, mean_hz }, i) => {
-    const phase = i / n;
-    const wave = Math.sin(phase * Math.PI * 5 + 1.0) * 22;
-    const edgeDip = (phase < 0.12 || phase > 0.88) ? -18 : 10;
-    const rate = Math.round(Math.max(180, Math.min(430, baseRate + wave + edgeDip)));
-    return { start, pitch_hz: mean_hz, speech_rate: rate };
+  return pitchSegments.map(({ start, mean_hz }) => {
+    const stt = sttSegments.find(s => s.start === start);
+    return { start, pitch_hz: mean_hz, speech_rate: stt?.cpm ?? 0 };
   });
 }
 
-// 타임라인 이벤트 기반으로 서론·본론·결론 구간 추출
-function buildSectionsFromTimeline(
+// 타임라인 이벤트 기반으로 서론·본론·결론 구간 추출 (레거시 — LLM 구조 없을 때 폴백용)
+export function buildSectionsFromTimeline(
   timeline: { time: string; event: string; type: string }[],
 ): PresentationSection[] {
   const toSec = (t: string) => {
@@ -175,6 +178,40 @@ function buildSectionsFromTimeline(
   return sections;
 }
 
+// LLM structure 배열로부터 서론·본론·결론 구간 추출
+function buildSectionsFromLlm(structure: Record<string, string>[]): PresentationSection[] {
+  const toSec = (t: string) => { const [m, s] = t.split(':').map(Number); return m * 60 + s; };
+  const entries = structure.map(item => {
+    const [time, label] = Object.entries(item)[0];
+    return { sec: toSec(time), label };
+  });
+  const totalSec = entries[entries.length - 1]?.sec ?? 0;
+  let bodyStart: number | null = null;
+  let conclusionStart: number | null = null;
+  for (const { sec, label } of entries) {
+    if (bodyStart === null && label.includes('본론')) bodyStart = sec;
+    if (conclusionStart === null && (label.includes('결론') || label.includes('마무리'))) conclusionStart = sec;
+  }
+  if (bodyStart === null && conclusionStart === null) return [
+    { label: '서론', start: 0, end: totalSec * 0.2 },
+    { label: '본론', start: totalSec * 0.2, end: totalSec * 0.8 },
+    { label: '결론', start: totalSec * 0.8, end: totalSec },
+  ];
+  const sections: PresentationSection[] = [];
+  const body = bodyStart ?? 0;
+  if (bodyStart !== null) sections.push({ label: '서론', start: 0, end: body });
+  if (bodyStart !== null && conclusionStart !== null) {
+    sections.push({ label: '본론', start: body, end: conclusionStart });
+    sections.push({ label: '결론', start: conclusionStart, end: totalSec });
+  } else if (bodyStart !== null) {
+    sections.push({ label: '본론', start: body, end: totalSec });
+  } else if (conclusionStart !== null) {
+    sections.push({ label: '서론/본론', start: 0, end: conclusionStart });
+    sections.push({ label: '결론', start: conclusionStart, end: totalSec });
+  }
+  return sections;
+}
+
 // 피치: 보라, 발화속도: 주황 — 명확히 구분되는 색
 const CHART_COLOR = { pitch: '#7c3aed', speech: '#ea580c' } as const;
 
@@ -200,7 +237,7 @@ function PresentationChartTooltip({ active, payload, label }: any) {
 function PresentationChart({
   data,
   sections,
-  pitchMean,
+  pitchRange,
   pitchMin,
   pitchMax,
   speechOptimalMin = 270,
@@ -208,7 +245,7 @@ function PresentationChart({
 }: {
   data: PresentationPoint[];
   sections: PresentationSection[];
-  pitchMean: number;
+  pitchRange: number;
   pitchMin: number;
   pitchMax: number;
   speechOptimalMin?: number;
@@ -244,7 +281,7 @@ function PresentationChart({
             className="accent-purple-600" />
           피치 변화 (Hz)
           <span className="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-mono text-xs">
-            평균 {pitchMean.toFixed(0)}Hz
+            변화폭 {pitchRange.toFixed(0)}Hz
           </span>
         </label>
       </div>
@@ -627,9 +664,12 @@ function GazeGrid({ grid }: { grid: number[][] }) {
 
 // ── 자세 라벨 한글 매핑 ───────────────────────────────────────────────────────
 const POSE_LABEL_KO: Record<string, string> = {
-  'Touching body': '몸 만지기',
-  'Slanting':      '몸 기울이기',
+  'Touching head': '머리 만지기',
   'Touching face': '얼굴 만지기',
+  'Touching body': '몸 만지기',
+  'Touching hand': '손 만지기',
+  'Swaying head':  '머리 흔들기',
+  'Swaying body':  '몸 흔들기',
 };
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
@@ -684,14 +724,15 @@ export default function ResultsPage() {
   useEffect(() => {
     if (!currentAttempt) return;
     const gazeM = (currentAttempt.analysisResults as any)?.gazeResult?.gaze_metrics
-      ?? gazeResult.gaze_metrics;
+      ?? (mockGazeResult as unknown as GazeResult).gaze_metrics;
     const eyeContactVal = Math.round((gazeM.grid_percent as number[][])[1][1] * 10) / 10;
     const ar = currentAttempt.analysisResults as any ?? {};
+    const mockRefiner = mockRefinerResult as unknown as RefinerResult;
     const negPoseRatio = ar.negativePoseDurationRatio
-      ?? refinerResult.refined_result.details.negative_posture_analysis.negative_posture_duration_ratio;
+      ?? mockRefiner.refined_result.details.negative_posture_analysis.negative_posture_duration_ratio;
     const lateRatio = ar.lateSpeedRatio
-      ?? (refinerResult.refined_result.details.late_speech_rate_analysis.late_average_cpm
-          / refinerResult.refined_result.details.late_speech_rate_analysis.overall_average_cpm);
+      ?? (mockRefiner.refined_result.details.late_speech_rate_analysis.late_average_cpm
+          / mockRefiner.refined_result.details.late_speech_rate_analysis.overall_average_cpm);
     // videoDuration(실제 영상 길이)을 우선 사용, 없으면 분석 데이터의 duration으로 폴백
     const durFallback = (() => {
       const durStr: string = ar.duration ?? '0:00';
@@ -732,66 +773,94 @@ export default function ResultsPage() {
   if (!currentSession) return null;
   if (!currentAttempt) { navigate('/dashboard'); return null; }
 
-  // 피치 변화폭 (최고–최저): ar 기본값보다 먼저 계산해 pitchVariation 기본값으로 사용
-  const { min_hz, max_hz } = pitchExample.pitch_metrics.summary;
+  // ── 회차 번호에 따라 mock fallback 선택 ──
+  const attemptIdx = attemptNumber ? parseInt(attemptNumber) : (currentSession?.attempts.length ?? 1);
+  const mockSttResult    = attemptIdx === 2 ? mockSttResult2    : mockSttResult1;
+  const mockPitchResult  = attemptIdx === 2 ? mockPitchResult2  : mockPitchResult1;
+  const mockLlmResult    = attemptIdx === 2 ? mockLlmResult2    : mockLlmResult1;
+  const mockPoseResult   = attemptIdx === 2 ? mockPoseResult2   : mockPoseResult1;
+  const mockRefinerResult = attemptIdx === 2 ? mockRefinerResult2 : mockRefinerResult1;
+  const mockGazeResult   = attemptIdx === 2 ? mockGazeResult2   : mockGazeResult1;
+
+  // ── 백엔드 연동 시 analysisResults에 아래 필드가 채워짐 (없으면 mock fallback) ──
+  const stt: SttResult = (currentAttempt.analysisResults as any)?.sttResult ?? (mockSttResult as unknown as SttResult);
+  const pitch: PitchResult = (currentAttempt.analysisResults as any)?.pitchResult ?? (mockPitchResult as unknown as PitchResult);
+  const llm: LlmResult = (currentAttempt.analysisResults as any)?.llmResult ?? (mockLlmResult as unknown as LlmResult);
+  const pose: PoseResult = (currentAttempt.analysisResults as any)?.poseResult ?? (mockPoseResult as unknown as PoseResult);
+  const refiner: RefinerResult = (currentAttempt.analysisResults as any)?.refinerResult ?? (mockRefinerResult as unknown as RefinerResult);
+  const gaze: GazeResult = (currentAttempt.analysisResults as any)?.gazeResult ?? (mockGazeResult as unknown as GazeResult);
+
+  // stt
+  const overallCpm = stt.audio_metrics.overall_cpm;
+  const durationSec = stt.audio_metrics.total_time_sec;
+
+  // pitch
+  const { min_hz, max_hz } = pitch.pitch_metrics;
   const pitchRange = Math.round((max_hz - min_hz) * 10) / 10;
 
-  // 시선 데이터 (백엔드 연동 시 analysisResults.gazeResult 로 교체)
-  const gazeMetrics = (currentAttempt.analysisResults as any)?.gazeResult?.gaze_metrics
-    ?? gazeResult.gaze_metrics;
-  const gazeGrid = gazeMetrics.grid_percent as number[][];
-  const eyeContactFromGaze = Math.round((gazeMetrics.grid_percent as number[][])[1][1] * 10) / 10;
+  // gaze
+  const gazeGrid = gaze.gaze_metrics.grid_percent;
+  const eyeContactFromGaze = Math.round(gazeGrid[1][1] * 10) / 10;
 
-  // 기본값과 실제 데이터 병합 (eyeContact는 gaze 데이터가 항상 우선)
-  const ar = {
-    speechRate: 300, duration: '8:30', postureScore: 75,
-    pitchVariation: pitchRange, avgIPsPerSentence: 3.5, avgWordsPerSentence: 10,
-    lateSpeedRatio: 1.05, longPauseCount: 2, wordPauseCount: 12,
-    fillerRate: 0.35, habitualBehaviorCount: 3,
-    ...currentAttempt.analysisResults,
-    eyeContact: eyeContactFromGaze,
-  };
+  // refiner
+  const negPoseDurationRatio = refiner.refined_result.details.negative_posture_analysis.negative_posture_duration_ratio;
+  const lateSpeedAnalysis = refiner.refined_result.details.late_speech_rate_analysis;
+  const lateSpeedRatio = lateSpeedAnalysis.late_average_cpm / lateSpeedAnalysis.overall_average_cpm;
+
+  // pose: 부정 자세만 필터 (Standing 제외)
+  const NEGATIVE_POSE_LABELS = ['Touching head', 'Touching face', 'Touching body', 'Touching hand', 'Swaying head', 'Swaying body'];
+  const negativePoseTimeline = pose.timeline.filter(e => NEGATIVE_POSE_LABELS.includes(e.label));
+
+  // postureTop3: negative_posture_by_label 사용
+  const postureTop3 = refiner.refined_result.details.negative_posture_analysis.negative_posture_by_label
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3)
+    .map((item, idx) => ({ rank: idx + 1, label: item.label, count: item.count, percent: Math.round(item.duration_sec / durationSec * 100) }));
+
+  // 그래프 데이터
+  const presentationData = buildCombinedTimeline(pitch.pitch_metrics.segment, stt.audio_metrics.segment);
+  const presentationSections = buildSectionsFromLlm(llm.feedback.summary.structure);
+
+  // Timeline 컴포넌트용 데이터: LLM structure → section 단위, script는 해당 구간 STT 텍스트 합산
+  const toSec = (t: string) => { const [m, s] = t.split(':').map(Number); return m * 60 + (s ?? 0); };
+  const structureEntries = llm.feedback.summary.structure.map(item => {
+    const [time, label] = Object.entries(item)[0];
+    return { time, label, startSec: toSec(time) };
+  });
+  const timelineData = structureEntries.map((entry, i) => {
+    const nextSec = i < structureEntries.length - 1 ? structureEntries[i + 1].startSec : Infinity;
+    const script = stt.audio_metrics.segment
+      .filter(seg => seg.start >= entry.startSec && seg.start < nextSec)
+      .map(seg => seg.text)
+      .join(' ');
+    return {
+      time: entry.time,
+      event: entry.label,
+      type: (i === 0 ? 'start' : i === structureEntries.length - 1 ? 'end' : 'content') as 'start' | 'content' | 'end',
+      script: script || undefined,
+    };
+  });
 
   // label별 탐지 구간 목록 (토글 시 표시)
-  const segmentsByLabel = poseData.timeline.reduce<Record<string, { start: number; end: number; duration: number }[]>>(
+  const segmentsByLabel = negativePoseTimeline.reduce<Record<string, { start: number; end: number; duration: number }[]>>(
     (acc, item) => {
       (acc[item.label] ??= []).push({ start: item.start, end: item.end, duration: item.duration });
       return acc;
     }, {}
   );
 
-  // 자세 Top 3: 발생 횟수(빈도수) 기준 정렬
-  // 백엔드 연동 시 analysisResults.postureTop3 로 교체
-  const postureTop3 = (() => {
-    const raw = (currentAttempt.analysisResults as any)?.postureTop3;
-    if (raw) return raw as { rank: number; label: string; count: number; percent: number }[];
-    const counts: Record<string, number> = {};
-    for (const item of poseData.timeline) {
-      counts[item.label] = (counts[item.label] ?? 0) + 1;
-    }
-    const total = Object.values(counts).reduce((a, b) => a + b, 0);
-    return Object.entries(counts)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 3)
-      .map(([label, count], idx) => ({
-        rank: idx + 1,
-        label,
-        count,
-        percent: Math.round((count / total) * 100),
-      }));
-  })();
-
-  // 발표 전체 그래프 데이터
-  // 백엔드 연동 시: ar.pitchTimeline / ar.speechRateTimeline 이 있으면 그걸 사용
-  const pitchTimeline = pitchExample.pitch_metrics.pitch_timeline;
-  const presentationData = buildCombinedTimeline(pitchTimeline, ar.speechRate);
-  const timelineData = presentationSummary.timeline as {
-    time: string; event: string; type: 'start' | 'content' | 'end'; script?: string;
-  }[];
-  const presentationSections = buildSectionsFromTimeline(timelineData);
-
-  // KPI 피치 카드: pitch_example 실데이터 사용
-  // 백엔드 연동 시 analysisResults.pitchRange, analysisResults.pitchSparkline 으로 교체
+  // 기본값과 실제 데이터 병합 (eyeContact, speechRate 등은 위에서 추출한 값 우선)
+  const ar = {
+    duration: '8:30', postureScore: 75,
+    pitchVariation: pitchRange, avgIPsPerSentence: 3.5, avgWordsPerSentence: 10,
+    longPauseCount: 2, wordPauseCount: 12,
+    fillerRate: 0.35, habitualBehaviorCount: 3,
+    ...currentAttempt.analysisResults,
+    speechRate: overallCpm,
+    eyeContact: eyeContactFromGaze,
+    lateSpeedRatio: lateSpeedRatio,
+    negativePoseDurationRatio: negPoseDurationRatio,
+  };
 
   const toSpeechLevel    = (rate: number): number => rate >= 270 && rate <= 330 ? 3 : rate >= 240 && rate <= 360 ? 2 : 1;
   const toPitchLevel     = (hz: number):   number => hz >= 70 && hz <= 90 ? 3 : hz >= 41 ? 2 : 1;
@@ -807,12 +876,8 @@ export default function ResultsPage() {
     return 1;
   };
 
-  const postureNegDurationRatio =
-    (currentAttempt.analysisResults as any)?.negativePoseDurationRatio
-    ?? refinerResult.refined_result.details.negative_posture_analysis.negative_posture_duration_ratio;
-  const lateSpeedRatioForRadar = (ar as any).lateSpeedRatio
-    ?? (refinerResult.refined_result.details.late_speech_rate_analysis.late_average_cpm
-        / refinerResult.refined_result.details.late_speech_rate_analysis.overall_average_cpm);
+  const postureNegDurationRatio = negPoseDurationRatio;
+  const lateSpeedRatioForRadar = lateSpeedRatio;
   const timeLimitSecForRadar = currentSession.formData?.timeLimit
     ? parseInt(currentSession.formData.timeLimit) * 60 : 0;
   const durationSecForRadar = videoDuration ?? 0;
@@ -934,7 +999,7 @@ export default function ResultsPage() {
               <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-slate-50 p-5 shadow-sm">
                 <h3 className="text-sm font-bold text-slate-900 mb-2">종합 평가</h3>
                 <p className="text-sm text-slate-700 leading-relaxed">
-                  {presentationSummary.overall_comment}
+                  {llm.feedback.summary.overall_comment}
                 </p>
               </div>
 
@@ -1054,7 +1119,7 @@ export default function ResultsPage() {
                 <PresentationChart
                   data={presentationData}
                   sections={presentationSections}
-                  pitchMean={pitchExample.pitch_metrics.summary.mean_hz}
+                  pitchRange={pitchRange}
                   pitchMin={min_hz}
                   pitchMax={max_hz}
                 />
@@ -1084,9 +1149,7 @@ export default function ResultsPage() {
 
               {/* 후반부 발화속도 분석 */}
               {(() => {
-                const lateData = (currentAttempt.analysisResults as any)?.refinerResult
-                  ?.refined_result?.details?.late_speech_rate_analysis
-                  ?? refinerResult.refined_result.details.late_speech_rate_analysis;
+                const lateData = (refiner as any).refined_result.details.late_speech_rate_analysis;
 
                 const { late_section_ratio, late_section_start_sec, late_average_cpm, overall_average_cpm, is_faster_than_overall } = lateData;
                 const changeRatio = (overall_average_cpm - late_average_cpm) / overall_average_cpm * 100;
@@ -1135,13 +1198,20 @@ export default function ResultsPage() {
 
               {/* 휴지 기간 (3초 이상) */}
               {(() => {
-                const PAUSE_THRESHOLD = refinerData.refined_result.details.pause_analysis.sentence_pause_threshold_sec;
-                const allPauses = refinerData.refined_result.details.pause_analysis.long_sentence_pause_top3;
+                const PAUSE_THRESHOLD = refiner.refined_result.details.pause_analysis.sentence_pause_threshold_sec;
+                const allPauses = refiner.refined_result.details.pause_analysis.long_sentence_pause_top3;
                 // 이전 문장 조회용 인덱스 맵
                 const textByIndex = Object.fromEntries(allPauses.map(p => [p.index, p.text]));
                 const qualifying = allPauses.filter(p => p.pause_duration_sec >= PAUSE_THRESHOLD);
 
-                if (qualifying.length === 0) return null;
+                if (qualifying.length === 0) return (
+                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                    <p className="text-sm font-semibold text-slate-600 mb-2 tracking-wide">
+                      휴지 기간 ({PAUSE_THRESHOLD}초 이상)
+                    </p>
+                    <p className="text-sm text-slate-400">{PAUSE_THRESHOLD}초 이상의 휴지 구간이 없었어요.</p>
+                  </div>
+                );
 
                 const fmtTime = (sec: number) => {
                   const m = Math.floor(sec / 60);
