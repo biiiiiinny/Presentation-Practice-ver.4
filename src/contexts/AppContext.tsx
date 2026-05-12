@@ -1,5 +1,62 @@
 import { createContext, useContext, useState, useRef, useEffect, ReactNode } from 'react';
 
+export interface SttSegment {
+  start: number; end: number; text: string;
+  syllables: number; cpm: number; fillers: string[]; pause_duration_sec: number;
+}
+export interface SttResult {
+  audio_metrics: { total_time_sec: number; overall_cpm: number; segment: SttSegment[] };
+}
+
+export interface PitchSegment {
+  index: number; start: number; end: number;
+  mean_hz: number; pitch_change_hz: number; intonation_phrase_count: number;
+}
+export interface PitchResult {
+  pitch_metrics: { min_hz: number; max_hz: number; mean_hz: number; segment: PitchSegment[] };
+}
+
+export interface LlmResult {
+  feedback: {
+    summary: {
+      structure: Record<string, string>[];
+      overall_comment: string;
+      good_points: string[];
+      improvements: string[];
+    };
+  };
+}
+
+export interface PoseEvent {
+  label: string; start: number; end: number; duration: number;
+}
+export interface PoseResult {
+  video: { duration_sec: number };
+  timeline: PoseEvent[];
+}
+
+export interface RefinerResult {
+  refined_result: {
+    details: {
+      late_speech_rate_analysis: {
+        late_average_cpm: number; overall_average_cpm: number; difference_ratio: number;
+      };
+      pause_analysis: {
+        sentence_pause_threshold_sec: number;
+        long_sentence_pause_top3: { index: number; text: string; pause_duration_sec: number; start: number; end: number }[];
+      };
+      negative_posture_analysis: {
+        negative_posture_duration_ratio: number;
+        negative_posture_by_label: { label: string; count: number; duration_sec: number }[];
+      };
+    };
+  };
+}
+
+export interface GazeResult {
+  gaze_metrics: { grid_percent: number[][] };
+}
+
 export interface IssueSegment {
   start: number;
   end: number;
@@ -41,6 +98,12 @@ export interface Attempt {
     fillerRate?: number;
     habitualBehaviorCount?: number;
     issueSegments?: IssueSegment[];
+    sttResult?: SttResult;
+    pitchResult?: PitchResult;
+    llmResult?: LlmResult;
+    poseResult?: PoseResult;
+    refinerResult?: RefinerResult;
+    gazeResult?: GazeResult;
   };
   checklist?: ChecklistItem[]; // 사용자가 저장한 다음 회차 목표 체크리스트
 }
