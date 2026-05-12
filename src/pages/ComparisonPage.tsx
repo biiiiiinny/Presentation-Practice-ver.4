@@ -1,257 +1,179 @@
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useApp } from '../contexts/AppContext';
-import type { ChecklistItem } from '../contexts/AppContext';
+
 import { VideoPlayer } from '../components/VideoPlayer';
 import {
-  ArrowLeft, TrendingUp, Minus, Eye, Mic,
-  CheckCircle, XCircle, AlertTriangle, Clock, Award, Activity,
+  ArrowLeft,
+  CheckCircle, XCircle, AlertTriangle,
 } from 'lucide-react';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
   PolarRadiusAxis, ResponsiveContainer, Legend, Tooltip as RechartsTooltip,
-  AreaChart, Area,
 } from 'recharts';
-
-// ── 기준값 ────────────────────────────────────────────────────────────────────
-// 발화속도: 아나운서 표준 발화속도(300~350자/분) 참고, 일반 발표 여유 마진 포함
-const SPEECH_MIN = 270;
-const SPEECH_MAX = 330;
-const EYE_THRESHOLD = 70;        // 정면 응시 권장 기준 (70% 이상)
-const CONFIDENCE_THRESHOLD = 70; // 자세 안정성 권장 기준 (70점 이상)
-const DURATION_TOLERANCE = 0.1;  // 목표 시간 ±10% 허용
 
 type ImprovementStatus = 'improved' | 'partial' | 'maintained' | 'worsened' | 'overcorrected';
 
-interface ImprovementResult {
-  status: ImprovementStatus;
-  rate: number | null; // 개선율 % (해당 시)
-  label: string;
+// ── LLM 종합 의견 JSON 스펙 ────────────────────────────────────────────────────
+// 백엔드에서 이 구조의 JSON을 내려주면 됩니다.
+export interface ComparisonOpinion {
+  script: string; // LLM이 생성한 종합 의견 텍스트
 }
-
-// ── 헬퍼 함수 ─────────────────────────────────────────────────────────────────
-
-const getSpeechRateCategory = (rate: number): '느림' | '적정' | '빠름' => {
-  if (rate < SPEECH_MIN) return '느림';
-  if (rate <= SPEECH_MAX) return '적정';
-  return '빠름';
-};
-
-
-
 
 const durationToSeconds = (d: string): number => {
   const [m, s] = d.split(':').map(Number);
   return m * 60 + s;
 };
 
-const analyzeSpeechRate = (r1: number, r2: number): ImprovementResult => {
-  const cat1 = getSpeechRateCategory(r1);
-  const cat2 = getSpeechRateCategory(r2);
 
-  if (cat1 === '적정') {
-    return cat2 === '적정'
-      ? { status: 'maintained', rate: null, label: '적정 범위 유지' }
-      : { status: 'worsened', rate: null, label: `${cat2}으로 저하` };
-  }
-  if (cat1 === '빠름') {
-    if (cat2 === '느림') return { status: 'overcorrected', rate: null, label: '느림으로 과보정됨' };
-    if (cat2 === '적정') return { status: 'improved', rate: 100, label: '적정 범위 진입 (완전 개선)' };
-    const rate = Math.round(Math.max(0, (r1 - r2) / (r1 - SPEECH_MAX) * 100));
-    return rate > 0
-      ? { status: 'partial', rate, label: `${rate}% 개선 (아직 빠름)` }
-      : { status: 'worsened', rate: null, label: '더 빨라짐' };
-  }
-  // 느림
-  if (cat2 === '빠름') return { status: 'overcorrected', rate: null, label: '빠름으로 과보정됨' };
-  if (cat2 === '적정') return { status: 'improved', rate: 100, label: '적정 범위 진입 (완전 개선)' };
-  const rate = Math.round(Math.max(0, (r2 - r1) / (SPEECH_MIN - r1) * 100));
-  return rate > 0
-    ? { status: 'partial', rate, label: `${rate}% 개선 (아직 느림)` }
-    : { status: 'worsened', rate: null, label: '더 느려짐' };
+// ── 3단계 레벨 변환 함수 ──────────────────────────────────────────────────────
+const toSpeechLevel    = (rate: number): number => rate >= 270 && rate <= 330 ? 3 : rate >= 240 && rate <= 360 ? 2 : 1;
+const toPitchLevel     = (hz: number):   number => hz >= 70 && hz <= 90 ? 3 : hz >= 41 ? 2 : 1;
+const toPostureLevel   = (ratio: number): number => ratio < 0.10 ? 3 : ratio <= 0.25 ? 2 : 1;
+const toEyeLevel       = (pct: number):  number => pct >= 70 ? 3 : pct >= 50 ? 2 : 1;
+const toLateSpeedLevel = (ratio: number): number => { const d = Math.abs(ratio - 1.0); return d <= 0.05 ? 3 : d <= 0.15 ? 2 : 1; };
+const toDurationLevel  = (sec: number, limitSec: number): number => {
+  if (limitSec <= 0) return 2;
+  const r = sec / limitSec;
+  if (r > 1.0) return 1;
+  if (r >= 0.9) return 3;
+  if (r >= 0.7) return 2;
+  return 1;
 };
 
-const analyzeEyeContact = (e1: number, e2: number): ImprovementResult => {
-  if (e1 >= EYE_THRESHOLD) {
-    return e2 >= EYE_THRESHOLD
-      ? { status: 'maintained', rate: null, label: '양호 유지' }
-      : { status: 'worsened', rate: null, label: `${EYE_THRESHOLD}% 이하로 저하` };
-  }
-  if (e2 >= EYE_THRESHOLD) return { status: 'improved', rate: 100, label: '기준 이상 달성 (완전 개선)' };
-  if (e2 > e1) {
-    const rate = Math.round((e2 - e1) / (EYE_THRESHOLD - e1) * 100);
-    return { status: 'partial', rate, label: `${rate}% 개선 (아직 부족)` };
-  }
-  return { status: 'worsened', rate: null, label: '더 낮아짐' };
-};
+// ── 자가 체크리스트 헬퍼 ─────────────────────────────────────────────────────
 
-const analyzeConfidence = (c1: number, c2: number): ImprovementResult => {
-  if (c1 >= CONFIDENCE_THRESHOLD) {
-    return c2 >= CONFIDENCE_THRESHOLD
-      ? { status: 'maintained', rate: null, label: '양호 유지' }
-      : { status: 'worsened', rate: null, label: '저하됨' };
-  }
-  if (c2 >= CONFIDENCE_THRESHOLD) return { status: 'improved', rate: 100, label: '기준 이상 달성' };
-  if (c2 > c1) {
-    const rate = Math.round((c2 - c1) / (CONFIDENCE_THRESHOLD - c1) * 100);
-    return { status: 'partial', rate, label: `${rate}% 개선` };
-  }
-  return { status: 'worsened', rate: null, label: '더 낮아짐' };
-};
+interface CheckResult { sentence: string; level: number; }
 
-const analyzeDuration = (sec1: number, sec2: number, limitSec: number): ImprovementResult => {
-  if (limitSec <= 0) return { status: 'maintained', rate: null, label: '목표 시간 미설정' };
-  const dev1 = Math.abs(sec1 - limitSec) / limitSec;
-  const dev2 = Math.abs(sec2 - limitSec) / limitSec;
-  if (dev1 <= DURATION_TOLERANCE) {
-    return dev2 <= DURATION_TOLERANCE
-      ? { status: 'maintained', rate: null, label: '목표 시간 준수 유지' }
-      : { status: 'worsened', rate: null, label: '시간 준수 저하' };
-  }
-  if (dev2 <= DURATION_TOLERANCE) return { status: 'improved', rate: 100, label: '목표 시간 내 완료 (완전 개선)' };
-  if (dev2 < dev1) {
-    const rate = Math.round((dev1 - dev2) / dev1 * 100);
-    return { status: 'partial', rate, label: `${rate}% 개선 (목표 시간과 차이 있음)` };
-  }
-  return { status: 'worsened', rate: null, label: '시간 오차 증가' };
-};
-
-
-// ── 3단계 레벨 변환 함수 (0=개선필요, 1=주의, 2=적정) ─────────────────────────
-const toSpeechLevel = (rate: number): number =>
-  rate >= 270 && rate <= 330 ? 3 : rate >= 240 && rate <= 360 ? 2 : 1;
-const toPitchLevel = (hz: number): number =>
-  hz >= 70 && hz <= 90 ? 3 : hz >= 41 ? 2 : 1;
-const toPostureLevel = (score: number): number => score >= 70 ? 3 : score >= 50 ? 2 : 1;
-const toEyeLevel = (pct: number): number => pct >= 70 ? 3 : pct >= 50 ? 2 : 1;
-
-// ── 체크리스트 헬퍼 ───────────────────────────────────────────────────────────
-
-function generateMockChecklist(ar: {
-  speechRate: number; eyeContact: number; pitchVariation: number;
-}): ChecklistItem[] {
-  const items: ChecklistItem[] = [];
-  if (ar.speechRate < 270 || ar.speechRate > 330)
-    items.push({ id: 'speechRate', category: 'voice', metric_key: 'speechRate',
-      condition: 'in_range', target_min: 270, target_max: 330, is_completed: false,
-      label: ar.speechRate < 270
-        ? `발화 속도 높이기 · 현재 ${ar.speechRate}음절/분 → 목표 270–330`
-        : `발화 속도 줄이기 · 현재 ${ar.speechRate}음절/분 → 목표 270–330` });
-  if (ar.pitchVariation < 70 || ar.pitchVariation > 90)
-    items.push({ id: 'pitchVariation', category: 'voice', metric_key: 'pitchVariation',
-      condition: 'in_range', target_min: 70, target_max: 90, is_completed: false,
-      label: ar.pitchVariation < 70
-        ? `피치 변화폭 늘리기 · 현재 ${ar.pitchVariation}Hz → 목표 70–90Hz`
-        : `피치 변화폭 줄이기 · 현재 ${ar.pitchVariation}Hz → 목표 70–90Hz` });
-  if (ar.eyeContact < 70)
-    items.push({ id: 'eyeContact', category: 'posture', metric_key: 'eyeContact',
-      condition: 'gte', target_min: 70, is_completed: false,
-      label: `정면 응시 비율 높이기 · 현재 ${ar.eyeContact}% → 목표 70% 이상` });
-  return items;
+function levelToStatus(l1: number, l2: number): ImprovementStatus {
+  if (l2 > l1) return 'improved';
+  if (l2 < l1) return 'worsened';
+  return 'maintained';
 }
 
-function checkActuallyAchieved(item: ChecklistItem, data: Record<string, number | undefined>): boolean {
-  if (!item.metric_key) return false;
-  const val = data[item.metric_key];
-  if (val == null) return false;
-  if (item.condition === 'in_range')
-    return val >= (item.target_min ?? -Infinity) && val <= (item.target_max ?? Infinity);
-  if (item.condition === 'gte') return val >= (item.target_min ?? -Infinity);
-  if (item.condition === 'lte') return val <= (item.target_max ?? Infinity);
-  return false;
+function speechResult(rate: number): CheckResult {
+  if (rate >= 270 && rate <= 330) return { sentence: `발화 속도 ${rate} 자/분으로 청중이 따라오기 좋은 속도였어요`, level: 3 };
+  if ((rate > 330 && rate <= 360) || (rate >= 240 && rate < 270)) return {
+    sentence: rate > 330 ? `발화 속도 ${rate} 자/분으로 약간 빠른 편이었어요` : `발화 속도 ${rate} 자/분으로 약간 느린 편이었어요`, level: 2,
+  };
+  return { sentence: rate > 360 ? `발화 속도 ${rate} 자/분으로 많이 빠른 편이었어요` : `발화 속도 ${rate} 자/분으로 많이 느린 편이었어요`, level: 1 };
 }
 
-function getMetricDisplay(item: ChecklistItem, data: Record<string, number | undefined>): string {
-  if (!item.metric_key) return '—';
-  const val = data[item.metric_key];
-  if (val == null) return '—';
-  if (item.metric_key === 'speechRate') return `${val}음절/분`;
-  if (item.metric_key === 'pitchVariation') return `${val}Hz`;
-  if (item.metric_key === 'eyeContact') return `${val}%`;
-  return String(val);
+function pitchResult(hz: number): CheckResult {
+  if (hz >= 70 && hz <= 90) return { sentence: `피치 변화폭 ${hz} Hz로 생동감 있게 발표했어요`, level: 3 };
+  if (hz > 90 || hz >= 41) return {
+    sentence: hz > 90 ? `피치 변화폭 ${hz} Hz로 목소리 변화가 다소 과한 편이었어요` : `피치 변화폭 ${hz} Hz로 목소리가 다소 단조로운 편이었어요`, level: 2,
+  };
+  return { sentence: `피치 변화폭 ${hz} Hz로 목소리 변화가 거의 없었어요`, level: 1 };
 }
 
-// ── KPI 비교 스파크라인 헬퍼 ──────────────────────────────────────────────────
-function generateCompSparkline(base: number, seed: number, count = 12): number[] {
-  return Array.from({ length: count }, (_, i) =>
-    Math.round(base * (1 + Math.sin(i * 0.9 + seed) * 0.1))
-  );
+function lateSpeedResult(ratio: number): CheckResult {
+  const dev = ratio - 1.0;
+  const absDev = Math.abs(dev);
+  const pct = Math.round(absDev * 100);
+  if (absDev <= 0.05) return { sentence: `후반부 말속도가 전반부 대비 ±${pct}%로 일정하게 유지됐어요`, level: 3 };
+  if (absDev <= 0.15) return {
+    sentence: dev > 0 ? `후반부 말속도가 전반부 대비 +${pct}% 빨라졌어요` : `후반부 말속도가 전반부 대비 -${pct}% 느려졌어요`, level: 2,
+  };
+  return {
+    sentence: dev > 0 ? `후반부 말속도가 전반부 대비 +${pct}% 크게 빨라졌어요` : `후반부 말속도가 전반부 대비 -${pct}% 크게 느려졌어요`, level: 1,
+  };
 }
 
-const analyzePitchVariation = (p1: number, p2: number): ImprovementResult => {
-  const inRange1 = p1 >= 70 && p1 <= 90;
-  const inRange2 = p2 >= 70 && p2 <= 90;
-  if (inRange1) {
-    return inRange2
-      ? { status: 'maintained', rate: null, label: '적정 범위 유지' }
-      : { status: 'worsened', rate: null, label: '적정 범위 이탈' };
-  }
-  if (inRange2) return { status: 'improved', rate: 100, label: '적정 범위 진입 (완전 개선)' };
-  const dist1 = p1 < 70 ? 70 - p1 : p1 - 90;
-  const dist2 = p2 < 70 ? 70 - p2 : p2 - 90;
-  if (dist2 < dist1) {
-    const rate = Math.min(99, Math.round((dist1 - dist2) / dist1 * 100));
-    return { status: 'partial', rate, label: `${rate}% 개선` };
-  }
-  return { status: 'worsened', rate: null, label: '범위 이탈 증가' };
-};
-
-const analyzeLateSpeed = (r1: number, r2: number): ImprovementResult => {
-  const good1 = Math.abs(r1 - 1.0) <= 0.05;
-  const good2 = Math.abs(r2 - 1.0) <= 0.05;
-  if (good1) {
-    return good2
-      ? { status: 'maintained', rate: null, label: '균등 속도 유지' }
-      : { status: 'worsened', rate: null, label: '후반부 속도 불균등 증가' };
-  }
-  if (good2) return { status: 'improved', rate: 100, label: '균등 속도 달성 (완전 개선)' };
-  const dev1 = Math.abs(r1 - 1.0);
-  const dev2 = Math.abs(r2 - 1.0);
-  if (dev2 < dev1) {
-    const rate = Math.min(99, Math.round((dev1 - dev2) / (dev1 - 0.05) * 100));
-    return { status: 'partial', rate, label: `${rate}% 개선` };
-  }
-  return { status: 'worsened', rate: null, label: '후반부 속도 불균등 악화' };
-};
-
-// ── 상태 배지 컴포넌트 ─────────────────────────────────────────────────────────
-function StatusBadge({ status }: { status: ImprovementStatus }) {
-  const base = 'flex items-center gap-1.5 font-semibold text-base';
-  if (status === 'improved') return (
-    <div className={`${base} text-green-700`}>
-      <CheckCircle className="w-4 h-4" />
-      <span>개선됨</span>
-    </div>
-  );
-  if (status === 'partial') return (
-    <div className={`${base} text-blue-600`}>
-      <TrendingUp className="w-4 h-4" />
-      <span>부분 개선</span>
-    </div>
-  );
-  if (status === 'maintained') return (
-    <div className={`${base} text-slate-500`}>
-      <Minus className="w-4 h-4" />
-      <span>유지</span>
-    </div>
-  );
-  if (status === 'overcorrected') return (
-    <div className={`${base} text-yellow-600`}>
-      <AlertTriangle className="w-4 h-4" />
-      <span>과보정</span>
-    </div>
-  );
-  return (
-    <div className={`${base} text-red-600`}>
-      <XCircle className="w-4 h-4" />
-      <span>저하됨</span>
-    </div>
-  );
+function postureResult(ratio: number): CheckResult {
+  const pct = Math.round(ratio * 100);
+  if (ratio < 0.10) return { sentence: `자세 불안정 비율 ${pct}%로 안정적인 자세를 유지했어요`, level: 3 };
+  if (ratio <= 0.25) return { sentence: `자세 불안정 비율 ${pct}%로 가끔 자세가 흐트러졌어요`, level: 2 };
+  return { sentence: `자세 불안정 비율 ${pct}%로 자세 흐트러짐이 자주 있었어요`, level: 1 };
 }
+
+function eyeResult(pct: number): CheckResult {
+  if (pct >= 70) return { sentence: `정면 응시 비율 ${pct}%로 청중과 충분히 눈을 맞췄어요`, level: 3 };
+  if (pct >= 50) return { sentence: `정면 응시 비율 ${pct}%로 시선이 화면에 더 머무는 경향이 있었어요`, level: 2 };
+  return { sentence: `정면 응시 비율 ${pct}%로 청중을 거의 바라보지 못했어요`, level: 1 };
+}
+
+function durationResult(sec: number, limitSec: number): CheckResult {
+  if (limitSec <= 0) return { sentence: '목표 시간이 설정되지 않았어요', level: 2 };
+  const fmt = (s: number) => {
+    const m = Math.floor(s / 60), rem = Math.round(s % 60);
+    return rem > 0 ? `${m}분 ${rem}초` : `${m}분`;
+  };
+  const r = sec / limitSec;
+  if (r > 1.0) return { sentence: `제한 시간 ${fmt(limitSec)}을 ${fmt(sec - limitSec)} 초과했어요 (실제: ${fmt(sec)})`, level: 1 };
+  if (r >= 0.9) return { sentence: `제한 시간 ${fmt(limitSec)} 내에 ${fmt(sec)}로 발표를 마쳤어요`, level: 3 };
+  if (r >= 0.7) return { sentence: `제한 시간 ${fmt(limitSec)}보다 ${fmt(limitSec - sec)} 일찍 끝났어요 (실제: ${fmt(sec)})`, level: 2 };
+  return { sentence: `제한 시간 ${fmt(limitSec)}보다 ${fmt(limitSec - sec)} 부족했어요 (실제: ${fmt(sec)})`, level: 1 };
+}
+
+// ── metric_key 별 결과 생성 ───────────────────────────────────────────────────
+function getAttemptResult(metricKey: string, data: any, timeLimitSec: number, videoDurationSec?: number): CheckResult {
+  switch (metricKey) {
+    case 'speechRate':                return speechResult(data.speechRate ?? 300);
+    case 'pitchVariation':            return pitchResult(data.pitchVariation ?? 75);
+    case 'lateSpeedRatio':            return lateSpeedResult(data.lateSpeedRatio ?? 1.0);
+    case 'negativePoseDurationRatio': return postureResult(data.negativePoseDurationRatio ?? 0);
+    case 'eyeContact':                return eyeResult(data.eyeContact ?? 0);
+    case 'durationSec': {
+      const sec = videoDurationSec ?? durationToSeconds(data.duration ?? '0:00');
+      return durationResult(sec, timeLimitSec);
+    }
+    default: return { sentence: '—', level: 2 };
+  }
+}
+
+const CATEGORY_STYLE = {
+  voice:   { label: '음성', cls: 'bg-purple-100 text-purple-700' },
+  posture: { label: '자세', cls: 'bg-green-100 text-green-700'  },
+} as const;
+
+
+function getComparisonSentence(metricKey: string | null, a1: any, a2: any, timeLimitSec: number, v1Sec?: number, v2Sec?: number): string {
+  switch (metricKey) {
+    case 'speechRate': {
+      const v1 = a1.speechRate ?? 300, v2 = a2.speechRate ?? 300;
+      if (v1 === v2) return `발화 속도가 ${v1} 자/분으로 동일했어요.`;
+      return `발화 속도가 ${v1} → ${v2} 자/분으로 ${v2 < v1 ? '느려졌어요.' : '빨라졌어요.'}`;
+    }
+    case 'pitchVariation': {
+      const v1 = a1.pitchVariation ?? 75, v2 = a2.pitchVariation ?? 75;
+      if (v1 === v2) return `피치 변화폭이 ${v1} Hz로 동일했어요.`;
+      return `피치 변화폭이 ${v1} → ${v2} Hz로 ${v2 > v1 ? '넓어졌어요.' : '좁아졌어요.'}`;
+    }
+    case 'lateSpeedRatio': {
+      const v1 = Math.round(Math.abs((a1.lateSpeedRatio ?? 1.0) - 1.0) * 100);
+      const v2 = Math.round(Math.abs((a2.lateSpeedRatio ?? 1.0) - 1.0) * 100);
+      if (v1 === v2) return `후반부 말속도 변화율이 ±${v1}%로 동일했어요.`;
+      return `후반부 말속도 변화율이 ±${v1}% → ±${v2}%로 ${v2 < v1 ? '안정됐어요.' : '벌어졌어요.'}`;
+    }
+    case 'negativePoseDurationRatio': {
+      const v1 = Math.round((a1.negativePoseDurationRatio ?? 0) * 100);
+      const v2 = Math.round((a2.negativePoseDurationRatio ?? 0) * 100);
+      if (v1 === v2) return `자세 불안정 비율이 ${v1}%로 동일했어요.`;
+      return `자세 불안정 비율이 ${v1}% → ${v2}%로 ${v2 < v1 ? '줄었어요.' : '늘었어요.'}`;
+    }
+    case 'eyeContact': {
+      const v1 = a1.eyeContact ?? 0, v2 = a2.eyeContact ?? 0;
+      if (v1 === v2) return `정면 응시 비율이 ${v1}%로 동일했어요.`;
+      return `정면 응시 비율이 ${v1}% → ${v2}%로 ${v2 > v1 ? '높아졌어요.' : '낮아졌어요.'}`;
+    }
+    case 'durationSec': {
+      const fmt = (s: number) => `${Math.floor(s / 60)}분 ${String(Math.round(s % 60)).padStart(2, '0')}초`;
+      const v1 = v1Sec ?? durationToSeconds(a1.duration ?? '0:00');
+      const v2 = v2Sec ?? durationToSeconds(a2.duration ?? '0:00');
+      const lim = timeLimitSec > 0 ? ` (제한: ${fmt(timeLimitSec)})` : '';
+      if (v1 === v2) return `발표 시간이 ${fmt(v1)}으로 동일했어요.${lim}`;
+      const dir = v2 > v1 ? '길어졌어요.' : '짧아졌어요.';
+      return `발표 시간이 ${fmt(v1)} → ${fmt(v2)}로 ${dir}${lim}`;
+    }
+    default: return '—';
+  }
+}
+
+
+
 
 // ── KPI 비교 카드 ─────────────────────────────────────────────────────────────
-const C1 = '#6366f1'; // 1회차 indigo
-const C2 = '#10b981'; // 2회차 emerald
-
 const LEVEL_BADGE: Record<number, { label: string; cls: string }> = {
   1: { label: '개선필요', cls: 'bg-red-100 text-red-700' },
   2: { label: '주의',    cls: 'bg-orange-100 text-orange-700' },
@@ -259,65 +181,44 @@ const LEVEL_BADGE: Record<number, { label: string; cls: string }> = {
 };
 
 function KPICompareCard({
-  label, unit, val1, val2, spark1, spark2, trend, gradKey, level1, level2,
+  label, unit, val1, val2, trend, level1, level2,
 }: {
   label: string; unit: string; val1: string; val2: string;
-  spark1: number[]; spark2: number[]; trend: 'up' | 'down' | 'flat';
-  gradKey: string; level1: number; level2: number;
+  trend: 'up' | 'down' | 'flat'; level1: number; level2: number;
 }) {
-  const chartData = spark1.map((v, i) => ({ i, v1: v, v2: spark2[i] }));
-  const gradId1 = `cg1-${gradKey}`;
-  const gradId2 = `cg2-${gradKey}`;
   const b1 = LEVEL_BADGE[level1];
   const b2 = LEVEL_BADGE[level2];
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col p-3 gap-1.5 min-w-0">
-      {/* 헤더 행: 라벨 + 트렌드 배지 */}
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col p-3 gap-2 min-w-0">
+      {/* 라벨 + 트렌드 */}
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold text-slate-500 truncate">{label}</p>
-        {trend === 'up' ? (
-          <span className="text-sm font-bold text-green-600 flex-shrink-0">▲</span>
-        ) : trend === 'down' ? (
-          <span className="text-sm font-bold text-red-600 flex-shrink-0">▼</span>
-        ) : (
-          <span className="text-sm font-bold text-slate-400 flex-shrink-0">—</span>
-        )}
+        {(() => {
+          const colorCls = level2 === 3 ? 'text-green-600' : level2 === 1 ? 'text-red-600' : 'text-orange-500';
+          const arrow = trend === 'up' ? '▲' : trend === 'down' ? '▼' : '—';
+          return <span className={`text-sm font-bold flex-shrink-0 ${colorCls}`}>{arrow}</span>;
+        })()}
       </div>
-      {/* 수치 행 */}
-      <div className="flex flex-col gap-0.5">
-        <div className="flex items-center gap-1">
-          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: C1 }} />
-          <span className="text-sm text-slate-400">1회차</span>
-          <span className={`text-sm font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ml-auto ${b1.cls}`}>{b1.label}</span>
-          <span className="text-xl font-bold text-slate-800 leading-none">{val1}</span>
-          <span className="text-sm text-slate-400">{unit}</span>
+      {/* 1회차 */}
+      <div className="flex items-end justify-between gap-1">
+        <div>
+          <p className="text-xs text-slate-400 mb-0.5">1회차</p>
+          <p className="text-2xl font-bold text-slate-700 leading-none">
+            {val1}<span className="text-sm font-normal text-slate-400 ml-1">{unit}</span>
+          </p>
         </div>
-        <div className="flex items-center gap-1">
-          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: C2 }} />
-          <span className="text-sm text-slate-400">2회차</span>
-          <span className={`text-sm font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ml-auto ${b2.cls}`}>{b2.label}</span>
-          <span className="text-xl font-bold text-slate-800 leading-none">{val2}</span>
-          <span className="text-sm text-slate-400">{unit}</span>
-        </div>
+        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${b1.cls}`}>{b1.label}</span>
       </div>
-      {/* 스파크라인 */}
-      <div className="mt-0.5">
-        <ResponsiveContainer width="100%" height={44}>
-          <AreaChart data={chartData} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
-            <defs>
-              <linearGradient id={gradId1} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor={C1} stopOpacity={0.2} />
-                <stop offset="95%" stopColor={C1} stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id={gradId2} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor={C2} stopOpacity={0.2} />
-                <stop offset="95%" stopColor={C2} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <Area type="monotone" dataKey="v1" stroke={C1} fill={`url(#${gradId1})`} strokeWidth={1.5} dot={false} />
-            <Area type="monotone" dataKey="v2" stroke={C2} fill={`url(#${gradId2})`} strokeWidth={1.5} dot={false} />
-          </AreaChart>
-        </ResponsiveContainer>
+      <div className="border-t border-slate-100" />
+      {/* 2회차 */}
+      <div className="flex items-end justify-between gap-1">
+        <div>
+          <p className="text-xs text-slate-400 mb-0.5">2회차</p>
+          <p className="text-2xl font-bold text-slate-900 leading-none">
+            {val2}<span className="text-sm font-normal text-slate-400 ml-1">{unit}</span>
+          </p>
+        </div>
+        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${b2.cls}`}>{b2.label}</span>
       </div>
     </div>
   );
@@ -348,6 +249,36 @@ export default function ComparisonPage() {
 
   const currentSession = sessions.find(s => s.id === sessionId);
 
+  const [video1Duration, setVideo1Duration] = useState<number | null>(null);
+  const [video2Duration, setVideo2Duration] = useState<number | null>(null);
+  const videoUrl1 = currentSession?.attempts[0]?.videoUrl;
+  const videoUrl2 = currentSession?.attempts[1]?.videoUrl;
+
+  useEffect(() => {
+    if (!videoUrl1) return;
+    const vid = document.createElement('video');
+    vid.src = videoUrl1;
+    vid.onloadedmetadata = () => setVideo1Duration(vid.duration);
+  }, [videoUrl1]);
+
+  useEffect(() => {
+    if (!videoUrl2) return;
+    const vid = document.createElement('video');
+    vid.src = videoUrl2;
+    vid.onloadedmetadata = () => setVideo2Duration(vid.duration);
+  }, [videoUrl2]);
+
+  const [opinion, setOpinion] = useState<ComparisonOpinion | null>(null);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    // TODO: 백엔드 연동 시 아래 주석을 해제하고 엔드포인트를 맞춰주세요.
+    // fetch(`/api/sessions/${sessionId}/comparison-opinion`)
+    //   .then(r => r.json())
+    //   .then((data: ComparisonOpinion) => setOpinion(data))
+    //   .catch(console.error);
+  }, [sessionId]);
+
   if (!currentSession || currentSession.attempts.length < 2) {
     navigate('/dashboard');
     return null;
@@ -357,12 +288,12 @@ export default function ComparisonPage() {
   const attempt2 = currentSession.attempts[1];
 
   const attempt1Data = attempt1.analysisResults ?? {
-    speechRate: 360, eyeContact: 78, duration: '8:30', postureScore: 75,
+    speechRate: 360, eyeContact: 78, duration: '8:30', negativePoseDurationRatio: 0.20,
     pitchVariation: 75, avgIPsPerSentence: 3.5, avgWordsPerSentence: 10,
     lateSpeedRatio: 1.05, longPauseCount: 2, wordPauseCount: 12, fillerRate: 0.35,
   };
   const attempt2Data = attempt2.analysisResults ?? {
-    speechRate: 330, eyeContact: 85, duration: '9:00', postureScore: 85,
+    speechRate: 330, eyeContact: 85, duration: '9:00', negativePoseDurationRatio: 0.08,
     pitchVariation: 80, avgIPsPerSentence: 2.9, avgWordsPerSentence: 10,
     lateSpeedRatio: 1.02, longPauseCount: 1, wordPauseCount: 9, fillerRate: 0.28,
   };
@@ -372,93 +303,42 @@ export default function ComparisonPage() {
   const timeLimitSeconds = currentSession.formData?.timeLimit
     ? parseInt(currentSession.formData.timeLimit) * 60 : 0;
 
-  // ── 개선 분석 ──────────────────────────────────────────────────────────────
-  const speechImprovement     = analyzeSpeechRate(attempt1Data.speechRate, attempt2Data.speechRate);
-  const eyeImprovement        = analyzeEyeContact(attempt1Data.eyeContact, attempt2Data.eyeContact);
-  const postureScoreImprovement = analyzeConfidence(attempt1Data.postureScore, attempt2Data.postureScore);
-  const durationImprovement   = analyzeDuration(attempt1Seconds, attempt2Seconds, timeLimitSeconds);
-  const pitchImprovement      = analyzePitchVariation(attempt1Data.pitchVariation ?? 75, attempt2Data.pitchVariation ?? 75);
-  const lateSpeedImprovement  = analyzeLateSpeed(attempt1Data.lateSpeedRatio ?? 1.05, attempt2Data.lateSpeedRatio ?? 1.05);
+  const dur1 = video1Duration != null ? Math.round(video1Duration) : attempt1Seconds;
+  const dur2 = video2Duration != null ? Math.round(video2Duration) : attempt2Seconds;
 
   // ── 레이더 차트 데이터 ─────────────────────────────────────────────────────
+  const a1 = attempt1Data as any;
+  const a2 = attempt2Data as any;
   const radarData = [
-    { metric: '발화 속도',  '1회차': toSpeechLevel(attempt1Data.speechRate),           '2회차': toSpeechLevel(attempt2Data.speechRate) },
-    { metric: '피치 변화폭', '1회차': toPitchLevel(attempt1Data.pitchVariation ?? 75), '2회차': toPitchLevel(attempt2Data.pitchVariation ?? 75) },
-    { metric: '자세',       '1회차': toPostureLevel(attempt1Data.postureScore),         '2회차': toPostureLevel(attempt2Data.postureScore) },
-    { metric: '정면 응시',  '1회차': toEyeLevel(attempt1Data.eyeContact),              '2회차': toEyeLevel(attempt2Data.eyeContact) },
+    { metric: '발화 속도',    '1회차': toSpeechLevel(attempt1Data.speechRate),         '2회차': toSpeechLevel(attempt2Data.speechRate) },
+    { metric: '피치 변화폭',  '1회차': toPitchLevel(a1.pitchVariation ?? 75),          '2회차': toPitchLevel(a2.pitchVariation ?? 75) },
+    { metric: '후반부 말속도', '1회차': toLateSpeedLevel(a1.lateSpeedRatio ?? 1.05),   '2회차': toLateSpeedLevel(a2.lateSpeedRatio ?? 1.02) },
+    { metric: '자세 안정성',  '1회차': toPostureLevel(a1.negativePoseDurationRatio ?? 0.20), '2회차': toPostureLevel(a2.negativePoseDurationRatio ?? 0.08) },
+    { metric: '정면 응시',    '1회차': toEyeLevel(attempt1Data.eyeContact),            '2회차': toEyeLevel(attempt2Data.eyeContact) },
+    { metric: '발표 시간',    '1회차': toDurationLevel(dur1, timeLimitSeconds), '2회차': toDurationLevel(dur2, timeLimitSeconds) },
   ];
 
-  // ── 피드백 수용 현황 아이템 ────────────────────────────────────────────────
-  const feedbackItems = [
-    {
-      title: '발화 속도',
-      icon: <Mic className="w-4 h-4" />,
-      attempt1Value: `${attempt1Data.speechRate}음절/분 (${getSpeechRateCategory(attempt1Data.speechRate)})`,
-      attempt2Value: `${attempt2Data.speechRate}음절/분 (${getSpeechRateCategory(attempt2Data.speechRate)})`,
-      result: speechImprovement,
-      note: '기준: 270~330음절/분',
-    },
-    {
-      title: '피치 변화폭',
-      icon: <Activity className="w-4 h-4" />,
-      attempt1Value: `${attempt1Data.pitchVariation ?? 75}Hz`,
-      attempt2Value: `${attempt2Data.pitchVariation ?? 75}Hz`,
-      result: pitchImprovement,
-      note: '기준: 70~90Hz',
-    },
-    {
-      title: '후반부 말속도',
-      icon: <Activity className="w-4 h-4" />,
-      attempt1Value: `${attempt1Data.lateSpeedRatio ?? 1.05}배`,
-      attempt2Value: `${attempt2Data.lateSpeedRatio ?? 1.05}배`,
-      result: lateSpeedImprovement,
-      note: '기준: 1.0 ± 0.05',
-    },
-    {
-      title: '자세 안정성',
-      icon: <Award className="w-4 h-4" />,
-      attempt1Value: `${attempt1Data.postureScore}점`,
-      attempt2Value: `${attempt2Data.postureScore}점`,
-      result: postureScoreImprovement,
-      note: '기준: 70점 이상',
-    },
-    {
-      title: '정면 응시',
-      icon: <Eye className="w-4 h-4" />,
-      attempt1Value: `${attempt1Data.eyeContact}%`,
-      attempt2Value: `${attempt2Data.eyeContact}%`,
-      result: eyeImprovement,
-      note: '기준: 70% 이상',
-    },
-    ...(timeLimitSeconds > 0 ? [{
-      title: '발표 시간',
-      icon: <Clock className="w-4 h-4" />,
-      attempt1Value: attempt1Data.duration,
-      attempt2Value: attempt2Data.duration,
-      result: durationImprovement,
-      note: `목표: ${currentSession.formData?.timeLimit}분 (±10%)`,
-    }] : []),
+  // ── 자가 체크리스트 ───────────────────────────────────────────────────────
+  const a1d = attempt1Data as any;
+  const a2d = attempt2Data as any;
+
+  const ALL_METRICS = [
+    { metric_key: 'speechRate',                label: '발화 속도',    category: 'voice'    as const },
+    { metric_key: 'pitchVariation',            label: '피치 변화폭',  category: 'voice'    as const },
+    { metric_key: 'lateSpeedRatio',            label: '후반부 말속도', category: 'voice'   as const },
+    { metric_key: 'negativePoseDurationRatio', label: '자세 안정성',  category: 'posture'  as const },
+    { metric_key: 'eyeContact',                label: '정면 응시',    category: 'posture'  as const },
+    { metric_key: 'durationSec',               label: '발표 시간',    category: 'voice'    as const },
   ];
 
-  // ── 종합 의견 ──────────────────────────────────────────────────────────────
-  const improvedItems  = feedbackItems.filter(i => i.result.status === 'improved' || i.result.status === 'partial');
-  const worsenedItems  = feedbackItems.filter(i => i.result.status === 'worsened' || i.result.status === 'overcorrected');
+  const fullChecklist = ALL_METRICS.map(metric => {
+    const isDur = metric.metric_key === 'durationSec';
+    const r1 = getAttemptResult(metric.metric_key, a1d, timeLimitSeconds, isDur ? dur1 : undefined);
+    const r2 = getAttemptResult(metric.metric_key, a2d, timeLimitSeconds, isDur ? dur2 : undefined);
+    const compSentence = getComparisonSentence(metric.metric_key, a1d, a2d, timeLimitSeconds, isDur ? dur1 : undefined, isDur ? dur2 : undefined);
+    return { metric, r1, r2, compSentence, status: levelToStatus(r1.level, r2.level) };
+  });
 
-  const overallOpinion = (() => {
-    if (improvedItems.length >= 3) {
-      const worsenedText = worsenedItems.length > 0
-        ? ` 다만 ${worsenedItems.map(i => i.title).join(', ')} 항목에 조금 더 집중해보세요.`
-        : ' 모든 항목에서 긍정적인 변화가 확인됩니다.';
-      return `이번 재발표에서 ${improvedItems.length}개 항목이 개선되었습니다. 꾸준한 연습의 효과가 나타나고 있습니다.${worsenedText}`;
-    }
-    if (improvedItems.length >= 1) {
-      const worsenedText = worsenedItems.length > 0
-        ? ` ${worsenedItems.map(i => i.title).join(', ')} 부분은 다음 발표 시 집중적으로 보완해보세요.`
-        : '';
-      return `${improvedItems.map(i => i.title).join(', ')} 항목에서 개선이 확인됩니다.${worsenedText}`;
-    }
-    return '이번 재발표에서 전반적인 개선이 확인되지 않았습니다. 1회차 피드백을 다시 확인하고 항목별 개선 목표를 설정해 재도전해보세요.';
-  })();
 
   const p1 = attempt1Data.pitchVariation ?? 75;
   const p2 = attempt2Data.pitchVariation ?? 75;
@@ -472,32 +352,6 @@ export default function ComparisonPage() {
     attempt2Data.eyeContact > attempt1Data.eyeContact ? 'up' :
     attempt2Data.eyeContact < attempt1Data.eyeContact ? 'down' : 'flat';
 
-  // ── 자가 체크리스트 비교 ───────────────────────────────────────────────────
-  const checklistItems: ChecklistItem[] = attempt1.checklist?.length
-    ? attempt1.checklist
-    : generateMockChecklist({
-        speechRate: attempt1Data.speechRate,
-        eyeContact: attempt1Data.eyeContact,
-        pitchVariation: attempt1Data.pitchVariation ?? 75,
-      });
-
-  const attempt2DataMap: Record<string, number | undefined> = {
-    speechRate: attempt2Data.speechRate,
-    eyeContact: attempt2Data.eyeContact,
-    pitchVariation: attempt2Data.pitchVariation,
-  };
-  const attempt1DataMap: Record<string, number | undefined> = {
-    speechRate: attempt1Data.speechRate,
-    eyeContact: attempt1Data.eyeContact,
-    pitchVariation: attempt1Data.pitchVariation,
-  };
-
-  const speechSpark1 = generateCompSparkline(attempt1Data.speechRate, 1);
-  const speechSpark2 = generateCompSparkline(attempt2Data.speechRate, 2);
-  const pitchSpark1  = generateCompSparkline(p1, 3);
-  const pitchSpark2  = generateCompSparkline(p2, 4);
-  const eyeSpark1    = generateCompSparkline(attempt1Data.eyeContact, 5);
-  const eyeSpark2    = generateCompSparkline(attempt2Data.eyeContact, 6);
 
   return (
     <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
@@ -557,10 +411,14 @@ export default function ComparisonPage() {
         <div className="w-1/2 bg-white rounded-xl shadow-lg overflow-hidden flex flex-col min-h-0">
           <div className="flex-1 overflow-y-auto scrollbar-hide">
 
-            {/* 종합 의견 */}
+            {/* 종합 의견 — LLM JSON → opinion state로 주입 */}
             <div className="p-5">
               <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-3">종합 의견</h3>
-              <p className="text-base text-slate-700 leading-relaxed">{overallOpinion}</p>
+              {opinion ? (
+                <p className="text-sm text-slate-700 leading-relaxed">{opinion.script}</p>
+              ) : (
+                <p className="text-sm text-slate-400 italic">종합 의견을 불러오는 중입니다...</p>
+              )}
             </div>
 
             <div className="border-t border-slate-100 mx-5" />
@@ -572,7 +430,7 @@ export default function ComparisonPage() {
                 각 항목을 개선필요 · 주의 · 적정 3단계로 평가합니다.
               </p>
               <ResponsiveContainer width="100%" height={260}>
-                <RadarChart data={radarData}>
+                <RadarChart data={radarData} outerRadius="72%" margin={{ top: 10, right: 40, bottom: 10, left: 40 }}>
                   <PolarGrid stroke="#e2e8f0" />
                   <PolarAngleAxis
                     dataKey="metric"
@@ -589,68 +447,26 @@ export default function ComparisonPage() {
 
             <div className="border-t border-slate-100 mx-5" />
 
-            {/* 피드백 수용 현황 */}
-            <div className="p-5">
-              <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-1">피드백 수용 현황</h3>
-              <p className="text-base text-slate-500 mb-4">1회차 결과 기반으로 2회차에서 각 항목이 얼마나 개선됐는지 추적합니다.</p>
-              <div className="grid grid-cols-2 gap-2.5">
-                {feedbackItems.map((item, idx) => {
-                  const statusColors: Record<ImprovementStatus, string> = {
-                    improved:     'bg-green-50 border-green-200',
-                    partial:      'bg-blue-50 border-blue-200',
-                    maintained:   'bg-slate-50 border-slate-200',
-                    overcorrected:'bg-yellow-50 border-yellow-200',
-                    worsened:     'bg-red-50 border-red-200',
-                  };
-                  const iconColors: Record<ImprovementStatus, string> = {
-                    improved:     'text-green-700',
-                    partial:      'text-blue-700',
-                    maintained:   'text-slate-500',
-                    overcorrected:'text-yellow-700',
-                    worsened:     'text-red-700',
-                  };
-                  return (
-                    <div key={idx} className={`p-3 rounded-xl border ${statusColors[item.result.status]}`}>
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className={iconColors[item.result.status]}>{item.icon}</span>
-                        <span className="font-bold text-slate-800 text-base">{item.title}</span>
-                      </div>
-                      <div className="flex items-center gap-1 text-sm text-slate-600 mb-1.5 flex-wrap">
-                        <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 whitespace-nowrap">{item.attempt1Value}</span>
-                        <span className="text-slate-400">→</span>
-                        <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 whitespace-nowrap">{item.attempt2Value}</span>
-                      </div>
-                      <StatusBadge status={item.result.status} />
-                      <p className="text-sm text-slate-400 mt-1">{item.result.label}</p>
-                      <p className="text-sm text-slate-400 mt-0.5">{item.note}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="border-t border-slate-100 mx-5" />
-
             {/* KPI 비교 */}
             <div className="p-5">
               <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-4">KPI 비교</h3>
               <div className="grid grid-cols-3 gap-3">
                 <KPICompareCard
-                  label="발화 속도" unit="음절/분" gradKey="speech"
+                  label="발화 속도" unit="음절/분"
                   val1={String(attempt1Data.speechRate)} val2={String(attempt2Data.speechRate)}
-                  spark1={speechSpark1} spark2={speechSpark2} trend={speechTrend}
+                  trend={speechTrend}
                   level1={toSpeechLevel(attempt1Data.speechRate)} level2={toSpeechLevel(attempt2Data.speechRate)}
                 />
                 <KPICompareCard
-                  label="피치 변화폭" unit="Hz" gradKey="pitch"
+                  label="피치 변화폭" unit="Hz"
                   val1={String(p1)} val2={String(p2)}
-                  spark1={pitchSpark1} spark2={pitchSpark2} trend={pitchTrend}
+                  trend={pitchTrend}
                   level1={toPitchLevel(p1)} level2={toPitchLevel(p2)}
                 />
                 <KPICompareCard
-                  label="정면 응시" unit="%" gradKey="eye"
+                  label="정면 응시" unit="%"
                   val1={String(attempt1Data.eyeContact)} val2={String(attempt2Data.eyeContact)}
-                  spark1={eyeSpark1} spark2={eyeSpark2} trend={eyeTrend}
+                  trend={eyeTrend}
                   level1={toEyeLevel(attempt1Data.eyeContact)} level2={toEyeLevel(attempt2Data.eyeContact)}
                 />
               </div>
@@ -658,57 +474,90 @@ export default function ComparisonPage() {
 
             <div className="border-t border-slate-100 mx-5" />
 
-            {/* 자가 체크리스트 비교 */}
+            {/* 자가 체크리스트 */}
             <div className="p-5">
-              <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-green-500 mb-1">자가 체크리스트 비교</h3>
-              <p className="text-base text-slate-500 mb-4">1회차에서 설정한 개선 목표가 2회차에서 실제로 달성됐는지 확인합니다.</p>
-              {checklistItems.length === 0 ? (
-                <div className="text-center py-6 text-base text-slate-400">1회차에서 모든 지표가 적정 범위였습니다 🎉</div>
-              ) : (
-                <div className="space-y-2">
-                  {checklistItems.map(item => {
-                    const achieved = checkActuallyAchieved(item, attempt2DataMap);
-                    const selfChecked = item.is_completed;
-                    return (
-                      <div key={item.id} className={`rounded-xl border p-3 ${achieved ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`}>
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="text-base text-slate-800 leading-snug flex-1">{item.label}</p>
-                          <div className="flex items-center gap-3 flex-shrink-0">
-                            <div className="flex flex-col items-center gap-0.5">
-                              <span className="text-sm text-slate-400">자기 체크</span>
-                              <span className={`text-base font-bold ${selfChecked ? 'text-green-600' : 'text-slate-300'}`}>
-                                {selfChecked ? '✓' : '—'}
-                              </span>
-                            </div>
-                            <div className="flex flex-col items-center gap-0.5">
-                              <span className="text-sm text-slate-400">실제 달성</span>
-                              <span className={`text-base font-bold ${achieved ? 'text-green-600' : 'text-red-500'}`}>
-                                {achieved ? '✓' : '✗'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-2">
-                          <span className="text-sm text-slate-400">1회차</span>
-                          <span className="text-sm font-semibold text-slate-700">{getMetricDisplay(item, attempt1DataMap)}</span>
-                          <span className="text-slate-300 text-sm">→</span>
-                          <span className="text-sm text-slate-400">2회차</span>
-                          <span className={`text-sm font-semibold ${achieved ? 'text-green-700' : 'text-red-600'}`}>
-                            {getMetricDisplay(item, attempt2DataMap)}
-                          </span>
-                        </div>
-                        {selfChecked !== achieved && (
-                          <p className="text-sm mt-1.5 font-semibold text-orange-600">
-                            {selfChecked && !achieved
-                              ? '수치상 목표 미달입니다.'
-                              : '목표를 달성했습니다!'}
-                          </p>
-                        )}
+              <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-1">자가 체크리스트 비교</h3>
+              <p className="text-sm text-slate-500 mb-4">6개 항목 전체를 비교합니다. 개선이 필요한 항목에는 체크박스가 활성화됩니다.</p>
+              <div className="space-y-3">
+                {fullChecklist.map(({ metric, r1, r2, compSentence }, idx) => {
+                  // 카드 테두리: 2회차 레벨 기준
+                  const borderCls =
+                    r2.level === 3 && r1.level < 3 ? 'border-green-200' :
+                    r2.level === 2                  ? 'border-orange-200' :
+                    r2.level === 1                  ? 'border-red-200'    : 'border-slate-200';
+
+                  const CheckIcon = ({ level }: { level: number }) => {
+                    if (level === 1) return <XCircle className="w-4 h-4 text-red-500" />;
+                    if (level === 2) return <AlertTriangle className="w-4 h-4 text-orange-400" />;
+                    return <div className="w-4 h-4 rounded-full border-2 border-slate-200" />;
+                  };
+                  const checkLabel = (level: number) =>
+                    level === 1 ? { text: '개선 필요', cls: 'text-red-600' } :
+                    level === 2 ? { text: '주의',      cls: 'text-orange-500' } :
+                                  { text: '적정',      cls: 'text-slate-400' };
+                  const l1 = checkLabel(r1.level);
+                  const l2 = checkLabel(r2.level);
+
+                  // 헤더 배지: 적정→적정이면 없음, 적정 도달이면 개선됨, 아니면 2회차 레벨 표시
+                  const HeaderBadge = () => {
+                    if (r2.level === 3 && r1.level === 3) return null;
+                    if (r2.level === 3) return (
+                      <div className="flex items-center gap-1 text-green-700 font-semibold text-sm flex-shrink-0">
+                        <CheckCircle className="w-4 h-4" /><span>개선됨</span>
                       </div>
                     );
-                  })}
-                </div>
-              )}
+                    if (r2.level === 2) return (
+                      <div className="flex items-center gap-1 text-orange-500 font-semibold text-sm flex-shrink-0">
+                        <AlertTriangle className="w-4 h-4" /><span>주의</span>
+                      </div>
+                    );
+                    return (
+                      <div className="flex items-center gap-1 text-red-600 font-semibold text-sm flex-shrink-0">
+                        <XCircle className="w-4 h-4" /><span>개선필요</span>
+                      </div>
+                    );
+                  };
+
+                  return (
+                    <div key={idx} className={`rounded-xl border bg-white overflow-hidden ${borderCls}`}>
+                      {/* 헤더: 카테고리 + 비교 문장 + 배지 */}
+                      <div className="flex items-center gap-2 px-4 py-3 bg-slate-50 border-b border-slate-100">
+                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${CATEGORY_STYLE[metric.category].cls}`}>
+                          {CATEGORY_STYLE[metric.category].label}
+                        </span>
+                        <p className="text-sm font-semibold text-slate-800 flex-1 leading-snug">{compSentence}</p>
+                        <HeaderBadge />
+                      </div>
+
+                      {/* 1회차 / 2회차 비교 행 */}
+                      <div className="divide-y divide-slate-100">
+                        {/* 1회차 */}
+                        <div className="flex items-center gap-3 px-4 py-2.5">
+                          <span className="text-xs font-semibold text-slate-400 w-10 flex-shrink-0">1회차</span>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <CheckIcon level={r1.level} />
+                            <span className={`text-xs font-semibold ${l1.cls}`}>{l1.text}</span>
+                          </div>
+                          <p className="text-xs text-slate-500 ml-auto">{r1.sentence}</p>
+                        </div>
+
+                        {/* 2회차 */}
+                        <div className="flex items-center gap-3 px-4 py-2.5">
+                          <span className="text-xs font-semibold text-slate-400 w-10 flex-shrink-0">2회차</span>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <CheckIcon level={r2.level} />
+                            <span className={`text-xs font-semibold ${l2.cls}`}>{l2.text}</span>
+                          </div>
+                          <p className={`text-xs font-medium ml-auto ${
+                            r2.level === 3 && r1.level < 3 ? 'text-green-700' :
+                            r2.level === 1                  ? 'text-red-600'   : 'text-slate-500'
+                          }`}>{r2.sentence}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* 하단 버튼 */}
