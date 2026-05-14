@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useApp } from '../contexts/AppContext';
 
@@ -45,7 +45,7 @@ const toDurationLevel  = (sec: number, limitSec: number): number => {
   return 1;
 };
 
-// ── 자가 체크리스트 헬퍼 ─────────────────────────────────────────────────────
+// ── 개선 과제 헬퍼 ─────────────────────────────────────────────────────
 
 interface CheckResult { sentence: string; level: number; }
 
@@ -180,23 +180,19 @@ const LEVEL_BADGE: Record<number, { label: string; cls: string }> = {
 };
 
 function KPICompareCard({
-  label, unit, val1, val2, trend, level1, level2,
+  label, unit, val1, val2, level1, level2,
 }: {
-  label: string; unit: string; val1: string; val2: string;
-  trend: 'up' | 'down' | 'flat'; level1: number; level2: number;
+  label: string; unit: string; val1: ReactNode; val2: ReactNode;
+  trend?: 'up' | 'down' | 'flat'; level1: number; level2: number;
 }) {
   const b1 = LEVEL_BADGE[level1];
   const b2 = LEVEL_BADGE[level2];
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col p-3 gap-2 min-w-0">
-      {/* 라벨 + 트렌드 */}
+      {/* 라벨 + 상태 배지 */}
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold text-slate-500 truncate">{label}</p>
-        {(() => {
-          const colorCls = level2 === 3 ? 'text-green-600' : level2 === 1 ? 'text-red-600' : 'text-orange-500';
-          const arrow = trend === 'up' ? '▲' : trend === 'down' ? '▼' : '—';
-          return <span className={`text-sm font-bold flex-shrink-0 ${colorCls}`}>{arrow}</span>;
-        })()}
+        <HeaderBadge level1={level1} level2={level2} />
       </div>
       {/* 1회차 */}
       <div className="flex items-end justify-between gap-1">
@@ -260,21 +256,25 @@ const dominantOffCenter = (grid: number[][]): string | null => {
   return grid[best.r][best.c] > grid[1][1] ? best.label : null;
 };
 
-// ── 자가 체크리스트 서브 컴포넌트 ────────────────────────────────────────────
+// ── 개선 과제 서브 컴포넌트 ────────────────────────────────────────────
 function CheckIcon({ level }: { level: number }) {
   if (level === 1) return <XCircle className="w-4 h-4 text-red-500" />;
   if (level === 2) return <AlertTriangle className="w-4 h-4 text-orange-400" />;
-  return <div className="w-4 h-4 rounded-full border-2 border-slate-200" />;
+  return <CheckCircle className="w-4 h-4 text-green-500" />;
 }
 
 function checkLabel(level: number) {
   if (level === 1) return { text: '개선 필요', cls: 'text-red-600' };
   if (level === 2) return { text: '주의',      cls: 'text-orange-500' };
-  return { text: '적정', cls: 'text-slate-400' };
+  return { text: '적정', cls: 'text-green-600' };
 }
 
 function HeaderBadge({ level1, level2 }: { level1: number; level2: number }) {
-  if (level2 === 3 && level1 === 3) return null;
+  if (level2 === 3 && level1 === 3) return (
+    <div className="flex items-center gap-1 text-slate-500 font-semibold text-sm flex-shrink-0">
+      <span className="w-4 h-4 inline-flex items-center justify-center leading-none">&#8212;</span><span>유지</span>
+    </div>
+  );
   if (level2 === 3) return (
     <div className="flex items-center gap-1 text-green-700 font-semibold text-sm flex-shrink-0">
       <CheckCircle className="w-4 h-4" /><span>개선됨</span>
@@ -327,10 +327,14 @@ function GazeComparisonGrid({ grid1, grid2 }: { grid1: number[][]; grid2: number
       </div>
 
       {/* 방향 레이블 + 그리드 */}
-      <div className="flex items-center gap-2 justify-center">
-        <span className="text-xs font-semibold text-slate-400 w-4 text-center">좌</span>
-        <div className="flex flex-col gap-1 items-center">
-          <span className="text-xs font-semibold text-slate-400">상</span>
+      <div className="flex justify-center">
+        <div className="inline-grid gap-x-2 gap-y-1" style={{ gridTemplateColumns: '1.5rem auto 1.5rem' }}>
+          <div />
+          <div className="flex justify-center"><span className="text-sm font-semibold text-slate-400">상</span></div>
+          <div />
+          <div className="flex items-center justify-center">
+            <span className="text-sm font-semibold text-slate-400">좌</span>
+          </div>
           <div className="grid grid-cols-3 gap-1">
             {grid2.map((row, ri) =>
               row.map((val2, ci) => {
@@ -388,9 +392,13 @@ function GazeComparisonGrid({ grid1, grid2 }: { grid1: number[][]; grid2: number
               })
             )}
           </div>
-          <span className="text-xs font-semibold text-slate-400">하</span>
+          <div className="flex items-center justify-center">
+            <span className="text-sm font-semibold text-slate-400">우</span>
+          </div>
+          <div />
+          <div className="flex justify-center"><span className="text-sm font-semibold text-slate-400">하</span></div>
+          <div />
         </div>
-        <span className="text-xs font-semibold text-slate-400 w-4 text-center">우</span>
       </div>
     </div>
   );
@@ -490,7 +498,7 @@ export default function ComparisonPage() {
     '2회차': Math.round((poseByLabel2.find(i => i.label === label)?.duration_sec ?? 0) * 10) / 10,
   }));
 
-  // ── 레이더 차트 + 자가 체크리스트 공용 ────────────────────────────────────
+  // ── 레이더 차트 + 개선 과제 공용 ────────────────────────────────────
   const a1d = attempt1Data as any;
   const a2d = attempt2Data as any;
   const radarData = [
@@ -531,6 +539,31 @@ export default function ComparisonPage() {
   const eyeTrend: 'up' | 'down' | 'flat' =
     attempt2Data.eyeContact > attempt1Data.eyeContact ? 'up' :
     attempt2Data.eyeContact < attempt1Data.eyeContact ? 'down' : 'flat';
+  const durTrend: 'up' | 'down' | 'flat' =
+    dur2 > dur1 ? 'up' : dur2 < dur1 ? 'down' : 'flat';
+  const poseTrend: 'up' | 'down' | 'flat' =
+    (attempt2Data as any).negativePoseDurationRatio > (attempt1Data as any).negativePoseDurationRatio ? 'up' :
+    (attempt2Data as any).negativePoseDurationRatio < (attempt1Data as any).negativePoseDurationRatio ? 'down' : 'flat';
+  const lateTrend: 'up' | 'down' | 'flat' = (() => {
+    const d1 = Math.abs(((attempt1Data as any).lateSpeedRatio ?? 1.0) - 1.0);
+    const d2 = Math.abs(((attempt2Data as any).lateSpeedRatio ?? 1.0) - 1.0);
+    return d2 > d1 ? 'up' : d2 < d1 ? 'down' : 'flat';
+  })();
+
+  const fmtDurNode = (sec: number): ReactNode => {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return (
+      <>
+        {m}<span className="text-sm font-normal text-slate-400 ml-1">분</span>
+        {s > 0 && <> {String(s).padStart(2, '0')}<span className="text-sm font-normal text-slate-400 ml-1">초</span></>}
+      </>
+    );
+  };
+  const fmtLatePct = (ratio: number) => {
+    const pct = Math.round((ratio - 1.0) * 100);
+    return `${pct >= 0 ? '+' : ''}${pct}`;
+  };
 
 
   return (
@@ -650,6 +683,28 @@ export default function ComparisonPage() {
                   level1={toEyeLevel(attempt1Data.eyeContact)} level2={toEyeLevel(attempt2Data.eyeContact)}
                 />
               </div>
+              <div className="grid grid-cols-3 gap-3 mt-3">
+                <KPICompareCard
+                  label="발표 시간" unit=""
+                  val1={fmtDurNode(dur1)} val2={fmtDurNode(dur2)}
+                  trend={durTrend}
+                  level1={toDurationLevel(dur1, timeLimitSeconds)} level2={toDurationLevel(dur2, timeLimitSeconds)}
+                />
+                <KPICompareCard
+                  label="문제 자세 비율" unit="%"
+                  val1={String(Math.round((attempt1Data as any).negativePoseDurationRatio * 100))}
+                  val2={String(Math.round((attempt2Data as any).negativePoseDurationRatio * 100))}
+                  trend={poseTrend}
+                  level1={toPostureLevel((attempt1Data as any).negativePoseDurationRatio)} level2={toPostureLevel((attempt2Data as any).negativePoseDurationRatio)}
+                />
+                <KPICompareCard
+                  label="후반부 말속도" unit="%"
+                  val1={fmtLatePct((attempt1Data as any).lateSpeedRatio ?? 1.0)}
+                  val2={fmtLatePct((attempt2Data as any).lateSpeedRatio ?? 1.0)}
+                  trend={lateTrend}
+                  level1={toLateSpeedLevel((attempt1Data as any).lateSpeedRatio ?? 1.0)} level2={toLateSpeedLevel((attempt2Data as any).lateSpeedRatio ?? 1.0)}
+                />
+              </div>
             </div>
 
             <div className="border-t border-slate-100 mx-5" />
@@ -765,9 +820,9 @@ export default function ComparisonPage() {
 
             <div className="border-t border-slate-100 mx-5" />
 
-            {/* 자가 체크리스트 */}
+            {/* 개선 과제 */}
             <div className="p-5">
-              <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-1">자가 체크리스트 비교</h3>
+              <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-1">개선 과제 비교</h3>
               <p className="text-base text-slate-500 mb-4">6개 항목 전체를 비교합니다. 개선이 필요한 항목에는 체크박스가 활성화됩니다.</p>
               <div className="space-y-3">
                 {fullChecklist.map(({ metric, r1, r2, compSentence }, idx) => {
