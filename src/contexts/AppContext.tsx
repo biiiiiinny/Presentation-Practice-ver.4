@@ -46,8 +46,12 @@ export interface RefinerResult {
         long_sentence_pause_top3: { index: number; text: string; pause_duration_sec: number; start: number; end: number }[];
       };
       negative_posture_analysis: {
+        total_posture_event_count: number;
+        negative_posture_event_count: number;
+        negative_posture_event_ratio: number;
+        negative_posture_duration_sec: number;
         negative_posture_duration_ratio: number;
-        negative_posture_by_label: { label: string; count: number; duration_sec: number }[];
+        negative_posture_by_label: { label: string; count: number; duration_sec: number; event_ratio: number; duration_ratio: number }[];
       };
     };
   };
