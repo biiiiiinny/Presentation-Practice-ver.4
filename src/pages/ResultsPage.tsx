@@ -1,10 +1,10 @@
 import { useNavigate, useParams } from 'react-router';
 import { useApp } from '../contexts/AppContext';
 import type { ChecklistItem } from '../contexts/AppContext';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { Timeline } from '../components/Timeline';
 import { VideoPlayer } from '../components/VideoPlayer';
-import { Mic, User, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
+import { Mic, User, ChevronDown, ChevronUp, CheckCircle, Eye } from 'lucide-react';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip as RechartsTooltip,
@@ -70,8 +70,8 @@ const KPI_STATUS_STYLE: Record<KPIStatus, { badge: string; line: string; fill: s
   '경고': { badge: 'bg-red-100 text-red-700',      line: '#dc2626', fill: '#dc2626' },
 };
 
-function KPICard({ label, value, unit, status }: {
-  label: string; value: number; unit: string; status: KPIStatus;
+function KPICard({ label, value, unit, status, displayValue }: {
+  label: string; value: number; unit: string; status: KPIStatus; displayValue?: ReactNode;
 }) {
   const s = KPI_STATUS_STYLE[status];
   return (
@@ -79,8 +79,8 @@ function KPICard({ label, value, unit, status }: {
       <p className="text-sm font-semibold text-slate-500 truncate">{label}</p>
       <div className="flex items-end justify-between gap-1">
         <p className="text-2xl font-bold text-slate-900 leading-none">
-          {value}
-          <span className="text-sm font-normal text-slate-400 ml-1">{unit}</span>
+          {displayValue ?? value}
+          {unit && <span className="text-sm font-normal text-slate-400 ml-1">{unit}</span>}
         </p>
         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${s.badge}`}>
           {status}
@@ -459,10 +459,12 @@ export function generateMockChecklist(ar: {
       tip: lateRatio > 1.0
         ? `발표 마지막 부분에서 의식적으로 천천히 말하면 마무리가 더 깔끔하게 전달돼요.`
         : `후반부에 핵심 내용을 짧게 요약하는 연습을 하면 긴장감 없이 속도를 유지할 수 있어요.` });
-  } else
+  } else {
+    const diffPct = Math.round(Math.abs(lateRatio - 1.0) * 100);
     items.push({ id: 'lateSpeed', category: 'voice', metric_key: 'lateSpeedRatio', is_completed: false,
       label: `후반부 발화 속도가 일정하게 유지됐어요.`,
-      fact: `후반부에도 일정한 발화 속도를 유지했어요.` });
+      fact: `후반부 말속도 변화율이 ±${diffPct}%로 일정하게 유지됐어요.` });
+  }
 
   // 자세 안정성
   const poseRatio = ar.negativePoseDurationRatio ?? 0;
@@ -479,7 +481,7 @@ export function generateMockChecklist(ar: {
   else
     items.push({ id: 'posture', category: 'posture', metric_key: 'negativePoseDurationRatio', is_completed: false,
       label: `발표 내내 자세가 안정적이었어요.`,
-      fact: `발표 내내 안정적인 자세를 유지했어요.` });
+      fact: `자세 불안정 비율이 ${Math.round(poseRatio * 100)}%로 발표 내내 안정적인 자세를 유지했어요.` });
 
   // 정면 응시
   if (ar.eyeContact < 70)
@@ -536,126 +538,144 @@ function ChecklistPanel({
   items: ChecklistItem[];
   onToggle: (id: string) => void;
 }) {
-  if (items.length === 0)
+  const goodItems = items.filter(item => !item.tip);
+  const improveItems = items.filter(item => !!item.tip);
+
+  const renderGoodItem = (item: ChecklistItem) => {
+    const cat = CATEGORY_STYLE[item.category];
     return (
-      <div className="text-center py-6 text-sm text-slate-400">
-        모든 지표가 적정 범위입니다 🎉
+      <div key={item.id} className="flex items-center gap-2 p-3 rounded-lg border bg-green-50 border-green-200">
+        <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${cat.cls}`}>
+          {cat.label}
+        </span>
+        <p className="text-sm leading-snug flex-1 min-w-0 text-green-800">
+          {item.fact ?? item.label}
+        </p>
       </div>
     );
+  };
+
+  const renderImproveItem = (item: ChecklistItem) => {
+    const cat = CATEGORY_STYLE[item.category];
+    if (item.is_completed) {
+      return (
+        <div key={item.id} className="flex items-center gap-2 p-3 rounded-lg border bg-green-50 border-green-200">
+          <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+          <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${cat.cls}`}>
+            {cat.label}
+          </span>
+          <p className="text-sm leading-snug flex-1 min-w-0 text-green-800 line-through decoration-green-400">
+            {item.fact ?? item.label}
+          </p>
+        </div>
+      );
+    }
+    return (
+      <label key={item.id}
+        className="flex flex-col gap-2 p-3 rounded-lg border cursor-pointer transition-colors bg-slate-50 border-slate-200 hover:bg-slate-100">
+        <div className="flex items-center gap-2">
+          <input type="checkbox" checked={false}
+            onChange={() => onToggle(item.id)}
+            className="accent-green-600 shrink-0" />
+          <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${cat.cls}`}>
+            {cat.label}
+          </span>
+          <p className="text-sm leading-snug flex-1 min-w-0 text-slate-800">
+            {item.fact ?? item.label}
+          </p>
+        </div>
+        <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
+          <span className="text-sm flex-shrink-0">💡</span>
+          <p className="text-xs text-amber-800 leading-relaxed">{item.tip}</p>
+        </div>
+      </label>
+    );
+  };
 
   return (
-    <div className="space-y-3">
-      <p className="text-xs text-slate-500">
-        스스로 연습하여 개선했다고 생각하는 항목을 체크해주세요
-      </p>
-      <p className="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 leading-relaxed">
-        2회차 발표 후 비교 페이지에서 자기 체크 여부와 실제 수치 달성 여부를 함께 확인할 수 있습니다.
-      </p>
-      <div className="space-y-2">
-        {items.map(item => {
-          const cat = CATEGORY_STYLE[item.category];
-          // 잘한 항목 (tip 없음): 체크박스·팁 없이 결과 문장만 표시
-          if (!item.tip) {
-            return (
-              <div key={item.id} className="flex items-center gap-2 p-3 rounded-lg border bg-slate-50 border-slate-200">
-                <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${cat.cls}`}>
-                  {cat.label}
-                </span>
-                <p className="text-sm leading-snug flex-1 min-w-0 text-slate-700">
-                  {item.fact ?? item.label}
-                </p>
-              </div>
-            );
-          }
-          // 개선 필요 항목이지만 체크됨: CheckCircle 아이콘으로 표시
-          if (item.is_completed) {
-            return (
-              <div key={item.id} className="flex items-center gap-2 p-3 rounded-lg border bg-green-50 border-green-200">
-                <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
-                <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${cat.cls}`}>
-                  {cat.label}
-                </span>
-                <p className="text-sm leading-snug flex-1 min-w-0 text-green-800 line-through decoration-green-400">
-                  {item.fact ?? item.label}
-                </p>
-              </div>
-            );
-          }
-          // 개선 필요 항목 미체크: 체크박스 + 팁 표시
-          return (
-            <label key={item.id}
-              className="flex flex-col gap-2 p-3 rounded-lg border cursor-pointer transition-colors bg-slate-50 border-slate-200 hover:bg-slate-100">
-              <div className="flex items-center gap-2">
-                <input type="checkbox" checked={false}
-                  onChange={() => onToggle(item.id)}
-                  className="accent-green-600 shrink-0" />
-                <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${cat.cls}`}>
-                  {cat.label}
-                </span>
-                <p className="text-sm leading-snug flex-1 min-w-0 text-slate-800">
-                  {item.fact ?? item.label}
-                </p>
-              </div>
-              <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
-                <span className="text-sm flex-shrink-0">💡</span>
-                <p className="text-xs text-amber-800 leading-relaxed">{item.tip}</p>
-              </div>
-            </label>
-          );
-        })}
-      </div>
+    <div className="space-y-4">
+      {goodItems.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-bold text-green-700 uppercase tracking-wide">잘한 점</p>
+          {goodItems.map(renderGoodItem)}
+        </div>
+      )}
+      {improveItems.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-bold text-orange-600 uppercase tracking-wide">개선할 점</p>
+          <p className="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 leading-relaxed">
+            2회차 발표 후 비교 페이지에서 자기 체크 여부와 실제 수치 달성 여부를 함께 확인할 수 있습니다.
+          </p>
+          {improveItems.map(renderImproveItem)}
+        </div>
+      )}
+      {goodItems.length === 0 && improveItems.length === 0 && (
+        <div className="text-center py-6 text-sm text-slate-400">
+          모든 지표가 적정 범위입니다 🎉
+        </div>
+      )}
     </div>
   );
 }
 
 // ── 시선 비율 3x3 그리드 ──────────────────────────────────────────────────────
 function GazeGrid({ grid }: { grid: number[][] }) {
-  const maxVal = Math.max(...grid.flat());
+  const maxNonCenter = Math.max(
+    ...grid.flatMap((row, ri) => row.map((v, ci) => (ri === 1 && ci === 1 ? 0 : v))),
+    0.01
+  );
+
   return (
     <div className="w-full h-full bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col">
       <p className="text-sm font-semibold text-slate-600 mb-3 tracking-wide">시선 분포</p>
       <div className="flex-1 flex items-center justify-center">
-        <div className="flex items-center gap-1.5">
-          {/* 좌 레이블 */}
-          <span className="text-sm font-semibold text-slate-400 w-5 text-center">좌</span>
-          <div className="flex flex-col gap-1">
-            {/* 상 레이블 */}
-            <span className="text-sm font-semibold text-slate-400 text-center">상</span>
-            <div className="grid grid-cols-3 gap-1">
+        <div className="inline-grid gap-x-2 gap-y-1" style={{ gridTemplateColumns: '1.5rem auto 1.5rem' }}>
+          <div />
+          <div className="flex justify-center"><span className="text-sm font-semibold text-slate-400">상</span></div>
+          <div />
+          <div className="flex items-center justify-center">
+            <span className="text-sm font-semibold text-slate-400">좌</span>
+          </div>
+          <div className="grid grid-cols-3 gap-1">
               {grid.map((row, ri) =>
                 row.map((val, ci) => {
                   const isCenter = ri === 1 && ci === 1;
-                  const isMax = maxVal > 0 && val === maxVal;
-                  const intensity = maxVal > 0 ? val / maxVal : 0;
-                  const bgOpacity = 0.05 + intensity * 0.85;
-                  const bg = `rgba(30, 58, 138, ${bgOpacity})`;
-                  const isDark = bgOpacity > 0.45;
-                  const valueCls = isDark ? 'text-white' : (isCenter ? 'text-blue-800' : 'text-slate-600');
+                  const absVal = Math.round(val * 10) / 10;
+
+                  if (isCenter) {
+                    return (
+                      <div
+                        key={`${ri}-${ci}`}
+                        className="w-20 h-20 rounded-xl flex flex-col items-center justify-center gap-0.5 relative z-10 scale-[1.13] shadow-xl"
+                        style={{ background: 'rgba(30, 64, 175, 0.75)' }}
+                      >
+                        <span className="text-[10px] font-bold text-white/70 tracking-wide">정면</span>
+                        <span className="text-2xl font-bold text-white leading-none">{absVal === 0 ? '—' : `${absVal}%`}</span>
+                      </div>
+                    );
+                  }
+
+                  const intensity = Math.min(val / (maxNonCenter * 1.2), 1);
+                  const bgOpacity = 0.04 + intensity * 0.22;
                   return (
                     <div
                       key={`${ri}-${ci}`}
-                      className={`w-14 h-12 rounded-lg flex flex-col items-center justify-center gap-0.5 ${
-                        isCenter
-                          ? 'border-2 border-blue-400'
-                          : isMax
-                          ? 'border-2 border-blue-600'
-                          : 'border border-slate-200'
-                      }`}
-                      style={{ background: bg }}
+                      className="w-20 h-20 rounded-lg flex flex-col items-center justify-center gap-0.5 border border-slate-200"
+                      style={{ background: `rgba(59, 130, 246, ${bgOpacity})` }}
                     >
-                      <span className={`text-xs font-bold leading-none ${valueCls}`}>
-                        {val > 0 ? `${val.toFixed(1)}%` : '0%'}
-                      </span>
+                      <span className="text-base font-bold text-slate-700 leading-none">{absVal === 0 ? '—' : `${absVal}%`}</span>
                     </div>
                   );
                 })
               )}
-            </div>
-            {/* 하 레이블 */}
-            <span className="text-sm font-semibold text-slate-400 text-center">하</span>
           </div>
-          {/* 우 레이블 */}
-          <span className="text-sm font-semibold text-slate-400 w-5 text-center">우</span>
+          <div className="flex items-center justify-center">
+            <span className="text-sm font-semibold text-slate-400">우</span>
+          </div>
+          <div />
+          <div className="flex justify-center"><span className="text-sm font-semibold text-slate-400">하</span></div>
+          <div />
         </div>
       </div>
     </div>
@@ -678,7 +698,7 @@ export default function ResultsPage() {
   const { sessionId, attemptNumber } = useParams<{ sessionId: string; attemptNumber?: string }>();
   const { sessions, setCurrentSessionId, saveChecklist } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'overall' | 'voice' | 'posture'>('overall');
+  const [activeTab, setActiveTab] = useState<'overall' | 'voice' | 'posture' | 'checklist'>('overall');
   const [currentVideoTime, setCurrentVideoTime] = useState(0);
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
   const [expandedPoses, setExpandedPoses] = useState<Set<string>>(new Set());
@@ -688,6 +708,7 @@ export default function ResultsPage() {
   const overallRef = useRef<HTMLDivElement>(null);
   const voiceRef = useRef<HTMLDivElement>(null);
   const postureRef = useRef<HTMLDivElement>(null);
+  const checklistRef = useRef<HTMLDivElement>(null);
 
   const currentSession = sessions.find(s => s.id === sessionId);
   const currentAttempt = currentSession && currentSession.attempts.length > 0
@@ -708,7 +729,7 @@ export default function ResultsPage() {
         entries.forEach((e) => {
           if (e.isIntersecting) {
             const id = e.target.getAttribute('data-section');
-            if (id === 'overall' || id === 'voice' || id === 'posture') setActiveTab(id);
+            if (id === 'overall' || id === 'voice' || id === 'posture' || id === 'checklist') setActiveTab(id);
           }
         });
       },
@@ -717,6 +738,7 @@ export default function ResultsPage() {
     if (overallRef.current) observer.observe(overallRef.current);
     if (voiceRef.current) observer.observe(voiceRef.current);
     if (postureRef.current) observer.observe(postureRef.current);
+    if (checklistRef.current) observer.observe(checklistRef.current);
     return () => observer.disconnect();
   }, [currentAttempt]);
 
@@ -801,9 +823,18 @@ export default function ResultsPage() {
   // gaze
   const gazeGrid = gaze.gaze_metrics.grid_percent;
   const eyeContactFromGaze = Math.round(gazeGrid[1][1] * 10) / 10;
+  const GAZE_DIRS = [
+    { r: 0, c: 1, label: '위쪽' }, { r: 2, c: 1, label: '아래쪽' },
+    { r: 1, c: 0, label: '왼쪽' }, { r: 1, c: 2, label: '오른쪽' },
+  ];
+  const dominantOffDir = (() => {
+    const best = GAZE_DIRS.reduce((a, b) => gazeGrid[a.r][a.c] >= gazeGrid[b.r][b.c] ? a : b);
+    return gazeGrid[best.r][best.c] > gazeGrid[1][1] ? best.label : null;
+  })();
 
   // refiner
-  const negPoseDurationRatio = refiner.refined_result.details.negative_posture_analysis.negative_posture_duration_ratio;
+  const negPoseAnalysis = refiner.refined_result.details.negative_posture_analysis;
+  const negPoseDurationRatio = negPoseAnalysis.negative_posture_duration_ratio;
   const lateSpeedAnalysis = refiner.refined_result.details.late_speech_rate_analysis;
   const lateSpeedRatio = lateSpeedAnalysis.late_average_cpm / lateSpeedAnalysis.overall_average_cpm;
 
@@ -909,8 +940,8 @@ export default function ResultsPage() {
     saveChecklist(sessionId!, currentAttempt.id, updated); // AppContext에 자동 반영 (네비게이션 후에도 유지)
   };
 
-  const scrollToSection = (section: 'overall' | 'voice' | 'posture') => {
-    const refMap = { overall: overallRef, voice: voiceRef, posture: postureRef };
+  const scrollToSection = (section: 'overall' | 'voice' | 'posture' | 'checklist') => {
+    const refMap = { overall: overallRef, voice: voiceRef, posture: postureRef, checklist: checklistRef };
     refMap[section].current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
@@ -972,19 +1003,20 @@ export default function ResultsPage() {
         <div className="w-1/2 bg-white rounded-xl shadow-lg overflow-hidden flex flex-col min-h-0">
           {/* 고정 탭 */}
           <div className="flex border-b border-slate-200 bg-white flex-shrink-0">
-            {(['overall', 'voice', 'posture'] as const).map((tab) => (
+            {(['overall', 'voice', 'posture', 'checklist'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => scrollToSection(tab)}
-                className={`flex-1 px-4 py-3 font-semibold text-sm transition-colors flex items-center justify-center gap-1.5 ${
+                className={`flex-1 px-2 py-3 font-semibold text-sm transition-colors flex items-center justify-center gap-1 ${
                   activeTab === tab
                     ? 'text-blue-900 border-b-2 border-blue-900 bg-blue-50'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
-                {tab === 'voice' && <Mic className="w-4 h-4" />}
-                {tab === 'posture' && <User className="w-4 h-4" />}
-                {tab === 'overall' ? '종합' : tab === 'voice' ? '음성' : '자세'}
+                {tab === 'voice' && <Mic className="w-4 h-4 flex-shrink-0" />}
+                {tab === 'posture' && <User className="w-4 h-4 flex-shrink-0" />}
+                {tab === 'checklist' && <CheckCircle className="w-4 h-4 flex-shrink-0" />}
+                {tab === 'overall' ? '종합' : tab === 'voice' ? '음성' : tab === 'posture' ? '자세' : '개선 과제'}
               </button>
             ))}
           </div>
@@ -1053,6 +1085,37 @@ export default function ResultsPage() {
                 />
               </div>
 
+              <div className="grid grid-cols-3 gap-3">
+                {(() => {
+                  const totalSec = videoDuration ?? 0;
+                  const m = Math.floor(totalSec / 60);
+                  const s = Math.floor(totalSec % 60);
+                  const node: ReactNode = videoDuration != null ? (
+                    <>
+                      {m}<span className="text-sm font-normal text-slate-400 ml-1">분</span>
+                      {s > 0 && <> {String(s).padStart(2, '0')}<span className="text-sm font-normal text-slate-400 ml-1">초</span></>}
+                    </>
+                  ) : '—';
+                  const lvl = toDurationLevel(durationSecForRadar, timeLimitSecForRadar);
+                  const status: KPIStatus = lvl === 3 ? '적정' : lvl === 2 ? '주의' : '경고';
+                  return <KPICard label="발표 시간" value={0} displayValue={node} unit="" status={status} />;
+                })()}
+                <KPICard
+                  label="문제 자세 비율"
+                  value={Math.round(negPoseDurationRatio * 100)}
+                  unit="%"
+                  status={negPoseDurationRatio < 0.10 ? '적정' : negPoseDurationRatio <= 0.25 ? '주의' : '경고'}
+                />
+                {(() => {
+                  const dev = lateSpeedRatio - 1.0;
+                  const pct = Math.round(dev * 100);
+                  const display = `${pct >= 0 ? '+' : ''}${pct}`;
+                  const absDev = Math.abs(dev);
+                  const status: KPIStatus = absDev <= 0.05 ? '적정' : absDev <= 0.15 ? '주의' : '경고';
+                  return <KPICard label="후반부 말속도" value={0} displayValue={display} unit="%" status={status} />;
+                })()}
+              </div>
+
               {/* 발표 시간 준수 여부 */}
               {(() => {
                 if (videoDuration === null) return null;
@@ -1091,14 +1154,6 @@ export default function ResultsPage() {
                   </div>
                 );
               })()}
-
-              <div className="space-y-3">
-                <h4 className="text-sm font-bold text-slate-900 pl-3 border-l-4 border-blue-900">자가 체크리스트</h4>
-                <ChecklistPanel
-                  items={checklistItems}
-                  onToggle={handleToggleChecklist}
-                />
-              </div>
 
             </div>
 
@@ -1291,16 +1346,62 @@ export default function ResultsPage() {
                 <h3 className="text-base font-bold text-slate-900">자세 및 응시</h3>
               </div>
 
+              {/* 시선 + 자세 인사이트 요약 카드 */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* 시선 응시 */}
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Eye className="w-4 h-4 text-blue-500" />
+                    <p className="text-xs font-semibold text-blue-600">정면 응시 비율</p>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-700 leading-none mb-1.5">{eyeContactFromGaze}%</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    {eyeContactFromGaze >= 70
+                      ? '청중과 충분히 눈을 맞췄어요.'
+                      : eyeContactFromGaze >= 50
+                      ? '시선이 화면에 머무는 경향이 있었어요.'
+                      : '정면 응시 비율을 높여보세요.'}
+                    {dominantOffDir && ` 주로 ${dominantOffDir}으로 시선이 분산됐어요.`}
+                  </p>
+                </div>
+
+                {/* 자세 안정성 */}
+                <div className={`border rounded-xl p-4 ${
+                  negPoseDurationRatio < 0.10
+                    ? 'bg-green-50 border-green-100'
+                    : negPoseDurationRatio <= 0.25
+                    ? 'bg-orange-50 border-orange-100'
+                    : 'bg-red-50 border-red-100'
+                }`}>
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <User className={`w-4 h-4 ${negPoseDurationRatio < 0.10 ? 'text-green-600' : negPoseDurationRatio <= 0.25 ? 'text-orange-500' : 'text-red-500'}`} />
+                    <p className={`text-xs font-semibold ${negPoseDurationRatio < 0.10 ? 'text-green-600' : negPoseDurationRatio <= 0.25 ? 'text-orange-500' : 'text-red-500'}`}>자세 안정성</p>
+                  </div>
+                  <p className={`text-2xl font-bold leading-none mb-1.5 ${negPoseDurationRatio < 0.10 ? 'text-green-700' : negPoseDurationRatio <= 0.25 ? 'text-orange-600' : 'text-red-600'}`}>
+                    {negPoseAnalysis.negative_posture_event_count}회
+                  </p>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    부정 자세 감지 · 총 {negPoseAnalysis.negative_posture_duration_sec.toFixed(1)}초 지속
+                    {` (발표 시간의 ${Math.round(negPoseDurationRatio * 100)}%)`}
+                  </p>
+                </div>
+              </div>
+
               {/* 시선 분포 + 자세 */}
-              <div className="flex gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 {/* 왼쪽: 시선 분포 3×3 */}
-                <div className="w-[40%] flex-none self-stretch">
+                <div className="min-w-0">
                   <GazeGrid grid={gazeGrid} />
                 </div>
 
                 {/* 오른쪽: 자세 Top 3 */}
-                <div className="flex-1 bg-slate-50 rounded-xl p-4 border border-slate-200">
-                  <p className="text-sm font-semibold text-slate-600 mb-3 tracking-wide">문제 자세 Top 3</p>
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-semibold text-slate-600 tracking-wide">문제 자세 Top 3</p>
+                    <span className="text-xs font-semibold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full flex-shrink-0">
+                      총 {negPoseAnalysis.negative_posture_event_count}회 감지
+                    </span>
+                  </div>
                   <div className="space-y-2">
                     {postureTop3.map(({ rank, label, count, percent }) => {
                       const rankCls = rank === 1
@@ -1372,6 +1473,22 @@ export default function ResultsPage() {
                 </div>
               </div>
 
+            </div>
+
+            <div className="border-t border-slate-100 mx-5" />
+
+            {/* ─── 개선 과제 섹션 ─── */}
+            <div ref={checklistRef} data-section="checklist" className="p-5 space-y-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                  <CheckCircle className="w-5 h-5 text-blue-700" />
+                </div>
+                <h3 className="text-base font-bold text-slate-900">개선 과제</h3>
+              </div>
+              <ChecklistPanel
+                items={checklistItems}
+                onToggle={handleToggleChecklist}
+              />
             </div>
 
           </div>
