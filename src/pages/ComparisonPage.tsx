@@ -256,19 +256,6 @@ const dominantOffCenter = (grid: number[][]): string | null => {
   return grid[best.r][best.c] > grid[1][1] ? best.label : null;
 };
 
-// ── 개선 과제 서브 컴포넌트 ────────────────────────────────────────────
-function CheckIcon({ level }: { level: number }) {
-  if (level === 1) return <XCircle className="w-4 h-4 text-red-500" />;
-  if (level === 2) return <AlertTriangle className="w-4 h-4 text-orange-400" />;
-  return <CheckCircle className="w-4 h-4 text-green-500" />;
-}
-
-function checkLabel(level: number) {
-  if (level === 1) return { text: '개선 필요', cls: 'text-red-600' };
-  if (level === 2) return { text: '주의',      cls: 'text-orange-500' };
-  return { text: '적정', cls: 'text-green-600' };
-}
-
 function HeaderBadge({ level1, level2 }: { level1: number; level2: number }) {
   if (level2 === 3 && level1 === 3) return (
     <div className="flex items-center gap-1 text-slate-500 font-semibold text-sm flex-shrink-0">
@@ -527,6 +514,68 @@ export default function ComparisonPage() {
     return { metric, r1, r2, compSentence };
   });
 
+  const fmtMetricVal = (metricKey: string, data: any, dur: number, timeLimitSec: number): string => {
+    switch (metricKey) {
+      case 'speechRate': return `${data.speechRate ?? 300} 자/분`;
+      case 'pitchVariation': return `${data.pitchVariation ?? 75} Hz`;
+      case 'lateSpeedRatio': {
+        const dev = (data.lateSpeedRatio ?? 1.0) - 1.0;
+        const pct = Math.round(dev * 100);
+        if (Math.abs(pct) <= 5) return `±${Math.abs(pct)}%`;
+        return `${pct > 0 ? '+' : ''}${pct}%`;
+      }
+      case 'negativePoseDurationRatio':
+        return `${Math.round((data.negativePoseDurationRatio ?? 0) * 100)}%`;
+      case 'eyeContact': return `${data.eyeContact ?? 0}%`;
+      case 'durationSec': {
+        const m = Math.floor(dur / 60), s = Math.floor(dur % 60);
+        const base = s > 0 ? `${m}분 ${String(s).padStart(2, '0')}초` : `${m}분`;
+        if (timeLimitSec > 0) {
+          const lm = Math.floor(timeLimitSec / 60), ls = Math.floor(timeLimitSec % 60);
+          const lim = ls > 0 ? `${lm}분 ${String(ls).padStart(2, '0')}초` : `${lm}분`;
+          return `${base} / 제한 ${lim}`;
+        }
+        return base;
+      }
+      default: return '—';
+    }
+  };
+
+  const getShortDesc = (metricKey: string, r1level: number, r2level: number, a2data: any): string => {
+    const improved = r2level === 3 && r1level < 3;
+    const maintained = r2level === 3 && r1level === 3;
+    switch (metricKey) {
+      case 'speechRate':
+        if (maintained) return '청중이 듣기 좋은 속도를 유지했어요.';
+        if (improved) return '발화 속도가 적정 범위에 들어왔어요.';
+        return (a2data.speechRate ?? 300) > 330 ? '조금 천천히 말해보세요.' : '핵심 내용을 조금 더 빠르게 전달해보세요.';
+      case 'pitchVariation':
+        if (maintained) return '생동감 있는 발표였어요.';
+        if (improved) return '목소리 변화가 자연스러워졌어요.';
+        return (a2data.pitchVariation ?? 75) < 70 ? '중요한 단어에서 목소리를 높여보세요.' : '주요 포인트 외에는 일정한 톤을 유지해보세요.';
+      case 'lateSpeedRatio':
+        if (maintained) return '발표 내내 일정한 속도를 유지했어요.';
+        if (improved) return '후반부 속도가 안정적으로 유지되었어요.';
+        return (a2data.lateSpeedRatio ?? 1.0) > 1.0 ? '마무리 부분에서 의식적으로 천천히 말해보세요.' : '후반부 핵심 내용을 짧게 요약해보세요.';
+      case 'negativePoseDurationRatio':
+        if (maintained) return '안정적인 자세를 계속 유지했어요.';
+        if (improved) return '발표 중 흔들림이 크게 줄었어요.';
+        return '발표 전 바른 자세를 의식적으로 잡아보세요.';
+      case 'eyeContact':
+        if (maintained) return '청중과 꾸준히 눈을 맞췄어요.';
+        if (improved) return '정면 응시가 눈에 띄게 늘었어요.';
+        return '카메라를 의식적으로 바라보는 연습을 해보세요.';
+      case 'durationSec':
+        if (maintained) return '제한 시간을 잘 지켰어요.';
+        if (improved) return '발표 시간이 적정 범위에 들어왔어요.';
+        return '핵심 내용을 압축해보세요.';
+      default: return '';
+    }
+  };
+
+  const improvedItems   = fullChecklist.filter(({ r1, r2 }) => r2.level === 3 && r1.level < 3);
+  const maintainedItems = fullChecklist.filter(({ r1, r2 }) => r2.level === 3 && r1.level === 3);
+  const needsWorkItems  = fullChecklist.filter(({ r1, r2 }) => r2.level < 3);
 
   const p1 = attempt1Data.pitchVariation ?? 75;
   const p2 = attempt2Data.pitchVariation ?? 75;
@@ -639,7 +688,7 @@ export default function ComparisonPage() {
             {/* 종합 비교 차트 */}
             <div className="p-5">
               <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-1">종합 비교 차트</h3>
-              <p className="text-base text-slate-500 mb-3">
+              <p className="text-sm text-slate-500 mb-3">
                 각 항목을 개선필요 · 주의 · 적정 3단계로 평가합니다.
               </p>
               <ResponsiveContainer width="100%" height={260}>
@@ -712,7 +761,7 @@ export default function ComparisonPage() {
             {/* 시선 분포 비교 */}
             <div className="p-5">
               <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-1">정면 응시 분포</h3>
-              <p className="text-base text-slate-500 mb-4">
+              <p className="text-sm text-slate-500 mb-4">
                 발표 중 시선이 화면의 어느 방향에 머물렀는지 보여줍니다. 가운데(정면)가 높을수록 좋아요.
               </p>
               <GazeComparisonGrid grid1={gazeGrid1} grid2={gazeGrid2} />
@@ -772,7 +821,7 @@ export default function ComparisonPage() {
             {/* 부정 자세 비교 */}
             <div className="p-5">
               <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-1">부정 자세 비교</h3>
-              <p className="text-base text-slate-500 mb-4">자세 유형별 지속 시간을 비교합니다.</p>
+              <p className="text-sm text-slate-500 mb-4">자세 유형별 지속 시간을 비교합니다.</p>
               {poseBarData.length === 0 ? (
                 <p className="text-sm text-slate-400 text-center py-6">감지된 부정 자세가 없어요.</p>
               ) : (() => {
@@ -822,59 +871,95 @@ export default function ComparisonPage() {
 
             {/* 개선 과제 */}
             <div className="p-5">
-              <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-1">개선 과제 비교</h3>
-              <p className="text-base text-slate-500 mb-4">6개 항목 전체를 비교합니다. 개선이 필요한 항목에는 체크박스가 활성화됩니다.</p>
-              <div className="space-y-3">
-                {fullChecklist.map(({ metric, r1, r2, compSentence }, idx) => {
-                  // 카드 테두리: 2회차 레벨 기준
-                  const borderCls =
-                    r2.level === 3 && r1.level < 3 ? 'border-green-200' :
-                    r2.level === 2                  ? 'border-orange-200' :
-                    r2.level === 1                  ? 'border-red-200'    : 'border-slate-200';
+              <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-4">개선 과제 비교</h3>
 
-                  const l1 = checkLabel(r1.level);
-                  const l2 = checkLabel(r2.level);
-
-                  return (
-                    <div key={idx} className={`rounded-xl border bg-white overflow-hidden ${borderCls}`}>
-                      {/* 헤더: 카테고리 + 비교 문장 + 배지 */}
-                      <div className="flex items-center gap-2 px-4 py-3 bg-slate-50 border-b border-slate-100">
-                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${CATEGORY_STYLE[metric.category].cls}`}>
-                          {CATEGORY_STYLE[metric.category].label}
-                        </span>
-                        <p className="text-sm font-semibold text-slate-800 flex-1 leading-snug">{compSentence}</p>
-                        <HeaderBadge level1={r1.level} level2={r2.level} />
-                      </div>
-
-                      {/* 1회차 / 2회차 비교 행 */}
-                      <div className="divide-y divide-slate-100">
-                        {/* 1회차 */}
-                        <div className="flex items-center gap-3 px-4 py-2.5">
-                          <span className="text-xs font-semibold text-slate-400 w-10 flex-shrink-0">1회차</span>
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <CheckIcon level={r1.level} />
-                            <span className={`text-xs font-semibold ${l1.cls}`}>{l1.text}</span>
-                          </div>
-                          <p className="text-xs text-slate-500 ml-auto">{r1.sentence}</p>
-                        </div>
-
-                        {/* 2회차 */}
-                        <div className="flex items-center gap-3 px-4 py-2.5">
-                          <span className="text-xs font-semibold text-slate-400 w-10 flex-shrink-0">2회차</span>
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <CheckIcon level={r2.level} />
-                            <span className={`text-xs font-semibold ${l2.cls}`}>{l2.text}</span>
-                          </div>
-                          <p className={`text-xs font-medium ml-auto ${
-                            r2.level === 3 && r1.level < 3 ? 'text-green-700' :
-                            r2.level === 1                  ? 'text-red-600'   : 'text-slate-500'
-                          }`}>{r2.sentence}</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+              {/* 전체 요약 */}
+              <div className="grid grid-cols-3 gap-3 mb-5">
+                <div className="bg-green-50 border border-green-200 rounded-xl py-4 flex flex-col items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    <p className="text-sm font-semibold text-green-600">개선됨</p>
+                  </div>
+                  <p className="text-3xl font-bold text-green-700">{improvedItems.length}</p>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-xl py-4 flex flex-col items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <XCircle className="w-4 h-4 text-red-500" />
+                    <p className="text-sm font-semibold text-red-500">개선 필요</p>
+                  </div>
+                  <p className="text-3xl font-bold text-red-600">{needsWorkItems.length}</p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl py-4 flex flex-col items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-4 h-4 inline-flex items-center justify-center text-slate-400 font-bold leading-none">—</span>
+                    <p className="text-sm font-semibold text-slate-500">유지</p>
+                  </div>
+                  <p className="text-3xl font-bold text-slate-600">{maintainedItems.length}</p>
+                </div>
               </div>
+
+              {/* 개선된 점 */}
+              {improvedItems.length > 0 && (
+                <div className="mb-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    <p className="text-sm font-bold text-green-700">개선된 점</p>
+                  </div>
+                  <div className="space-y-2">
+                    {improvedItems.map(({ metric, r1, r2 }) => (
+                      <div key={metric.metric_key} className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                        <p className="text-xs font-bold text-green-700 mb-1">[{metric.label}]</p>
+                        <p className="text-sm font-bold text-slate-800 mb-0.5">
+                          {fmtMetricVal(metric.metric_key, a1d, dur1, timeLimitSeconds)} → {fmtMetricVal(metric.metric_key, a2d, dur2, timeLimitSeconds)}
+                        </p>
+                        <p className="text-xs text-slate-500">{getShortDesc(metric.metric_key, r1.level, r2.level, a2d)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 개선 필요한 점 */}
+              {needsWorkItems.length > 0 && (
+                <div className="mb-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <XCircle className="w-4 h-4 text-red-500" />
+                    <p className="text-sm font-bold text-red-600">개선 필요한 점</p>
+                  </div>
+                  <div className="space-y-2">
+                    {needsWorkItems.map(({ metric, r1, r2 }) => (
+                      <div key={metric.metric_key} className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                        <p className="text-xs font-bold text-red-600 mb-1">[{metric.label}]</p>
+                        <p className="text-sm font-bold text-slate-800 mb-0.5">
+                          {fmtMetricVal(metric.metric_key, a2d, dur2, timeLimitSeconds)}
+                        </p>
+                        <p className="text-xs text-slate-500">{getShortDesc(metric.metric_key, r1.level, r2.level, a2d)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 잘 유지한 점 */}
+              {maintainedItems.length > 0 && (
+                <div className="mb-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="w-4 h-4 inline-flex items-center justify-center text-slate-500 font-bold leading-none text-base">—</span>
+                    <p className="text-sm font-bold text-slate-600">잘 유지한 점</p>
+                  </div>
+                  <div className="space-y-2">
+                    {maintainedItems.map(({ metric, r1, r2 }) => (
+                      <div key={metric.metric_key} className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                        <p className="text-xs font-bold text-slate-500 mb-1">[{metric.label}]</p>
+                        <p className="text-sm font-bold text-slate-800 mb-0.5">
+                          {fmtMetricVal(metric.metric_key, a2d, dur2, timeLimitSeconds)}
+                        </p>
+                        <p className="text-xs text-slate-500">{getShortDesc(metric.metric_key, r1.level, r2.level, a2d)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 하단 버튼 */}
