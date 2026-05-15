@@ -4,7 +4,7 @@ import type { ChecklistItem } from '../contexts/AppContext';
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { Timeline } from '../components/Timeline';
 import { VideoPlayer } from '../components/VideoPlayer';
-import { Mic, User, ChevronDown, ChevronUp, CheckCircle, Eye } from 'lucide-react';
+import { Mic, User, ChevronDown, ChevronUp, CheckCircle, XCircle, Eye } from 'lucide-react';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip as RechartsTooltip,
@@ -544,7 +544,7 @@ function ChecklistPanel({
   const renderGoodItem = (item: ChecklistItem) => {
     const cat = CATEGORY_STYLE[item.category];
     return (
-      <div key={item.id} className="flex items-center gap-2 p-3 rounded-lg border bg-green-50 border-green-200">
+      <div key={item.id} className="flex items-center gap-2 px-4 py-3 rounded-xl border bg-green-50 border-green-200">
         <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
         <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${cat.cls}`}>
           {cat.label}
@@ -560,7 +560,7 @@ function ChecklistPanel({
     const cat = CATEGORY_STYLE[item.category];
     if (item.is_completed) {
       return (
-        <div key={item.id} className="flex items-center gap-2 p-3 rounded-lg border bg-green-50 border-green-200">
+        <div key={item.id} className="flex items-center gap-2 px-4 py-3 rounded-xl border bg-green-50 border-green-200">
           <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
           <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${cat.cls}`}>
             {cat.label}
@@ -573,7 +573,7 @@ function ChecklistPanel({
     }
     return (
       <label key={item.id}
-        className="flex flex-col gap-2 p-3 rounded-lg border cursor-pointer transition-colors bg-slate-50 border-slate-200 hover:bg-slate-100">
+        className="flex flex-col gap-2 px-4 py-3 rounded-xl border cursor-pointer transition-colors bg-red-50 border-red-200 hover:bg-red-100">
         <div className="flex items-center gap-2">
           <input type="checkbox" checked={false}
             onChange={() => onToggle(item.id)}
@@ -585,7 +585,7 @@ function ChecklistPanel({
             {item.fact ?? item.label}
           </p>
         </div>
-        <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
+        <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-2.5 py-2">
           <span className="text-sm flex-shrink-0">💡</span>
           <p className="text-xs text-amber-800 leading-relaxed">{item.tip}</p>
         </div>
@@ -597,14 +597,20 @@ function ChecklistPanel({
     <div className="space-y-4">
       {goodItems.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-bold text-green-700 uppercase tracking-wide">잘한 점</p>
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-green-600" />
+            <p className="text-sm font-bold text-green-700">잘한 점</p>
+          </div>
           {goodItems.map(renderGoodItem)}
         </div>
       )}
       {improveItems.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-bold text-orange-600 uppercase tracking-wide">개선할 점</p>
-          <p className="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 leading-relaxed">
+          <div className="flex items-center gap-2">
+            <XCircle className="w-4 h-4 text-red-500" />
+            <p className="text-sm font-bold text-red-600">개선할 점</p>
+          </div>
+          <p className="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 leading-relaxed">
             2회차 발표 후 비교 페이지에서 자기 체크 여부와 실제 수치 달성 여부를 함께 확인할 수 있습니다.
           </p>
           {improveItems.map(renderImproveItem)}
