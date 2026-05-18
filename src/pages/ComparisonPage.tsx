@@ -6,6 +6,7 @@ import { VideoPlayer } from '../components/VideoPlayer';
 import {
   ArrowLeft,
   CheckCircle, XCircle, AlertTriangle, Eye,
+  Gauge, Activity, Timer, Shield, Clock,
 } from 'lucide-react';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
@@ -17,6 +18,123 @@ import mockRefinerResult1 from '../../json_examples/1회차 결과 json/refiner_
 import mockRefinerResult2 from '../../json_examples/2회차 결과 json/refiner_2.json';
 import type { GazeResult, RefinerResult } from '../contexts/AppContext';
 
+// ── 개선 과제 비교 헬퍼 ───────────────────────────────────────────────────────
+function MetricIconComp({ mk, cls }: { mk: string; cls?: string }) {
+  const p = { className: cls };
+  switch (mk) {
+    case 'speechRate':                return <Gauge {...p} />;
+    case 'pitchVariation':            return <Activity {...p} />;
+    case 'lateSpeedRatio':            return <Timer {...p} />;
+    case 'negativePoseDurationRatio': return <Shield {...p} />;
+    case 'eyeContact':                return <Eye {...p} />;
+    case 'durationSec':               return <Clock {...p} />;
+    default:                          return <Eye {...p} />;
+  }
+}
+
+function getMetricChangeBadge(
+  metricKey: string, a1d: any, a2d: any, dur1: number, dur2: number,
+): { arrow: string; pct: number; text: string } {
+  switch (metricKey) {
+    case 'speechRate': {
+      const v1 = a1d.speechRate ?? 300, v2 = a2d.speechRate ?? 300;
+      const diff = v2 - v1;
+      const pct = Math.round(Math.abs(diff) / Math.max(v1, 1) * 100);
+      return { arrow: diff > 0 ? '↑' : '↓', pct, text: diff > 0 ? '증가' : '감소' };
+    }
+    case 'pitchVariation': {
+      const v1 = a1d.pitchVariation ?? 75, v2 = a2d.pitchVariation ?? 75;
+      const diff = v2 - v1;
+      return { arrow: diff >= 0 ? '↑' : '↓', pct: Math.round(Math.abs(diff) / Math.max(v1, 1) * 100), text: diff >= 0 ? '증가' : '감소' };
+    }
+    case 'negativePoseDurationRatio': {
+      const v1 = (a1d.negativePoseDurationRatio ?? 0) * 100;
+      const v2 = (a2d.negativePoseDurationRatio ?? 0) * 100;
+      const diff = v2 - v1;
+      const pct = v1 > 0 ? Math.round(Math.abs(diff) / v1 * 100) : 0;
+      return { arrow: diff < 0 ? '↓' : '↑', pct, text: diff < 0 ? '감소' : '증가' };
+    }
+    case 'eyeContact': {
+      const v1 = a1d.eyeContact ?? 0, v2 = a2d.eyeContact ?? 0;
+      const diff = v2 - v1;
+      return { arrow: diff >= 0 ? '↑' : '↓', pct: Math.abs(diff), text: diff >= 0 ? '증가' : '감소' };
+    }
+    case 'lateSpeedRatio': {
+      const d1 = Math.abs((a1d.lateSpeedRatio ?? 1.0) - 1.0) * 100;
+      const d2 = Math.abs((a2d.lateSpeedRatio ?? 1.0) - 1.0) * 100;
+      return { arrow: '↓', pct: Math.round(Math.abs(d1 - d2)), text: '안정' };
+    }
+    case 'durationSec': {
+      const diff = dur2 - dur1;
+      return { arrow: diff >= 0 ? '↑' : '↓', pct: Math.round(Math.abs(diff) / Math.max(dur1, 1) * 100), text: diff >= 0 ? '증가' : '감소' };
+    }
+    default: return { arrow: '→', pct: 0, text: '' };
+  }
+}
+
+function getMetricProgress(
+  metricKey: string, a2d: any, dur2: number, timeLimitSec: number, level: number,
+): { barPct: number; barCls: string; targetLabel: string } {
+  const barCls = level === 2 ? 'bg-orange-400' : 'bg-red-400';
+  switch (metricKey) {
+    case 'eyeContact':
+      return { barPct: Math.min(a2d.eyeContact ?? 0, 100), barCls, targetLabel: '70% 이상' };
+    case 'negativePoseDurationRatio':
+      return { barPct: Math.min(Math.round((a2d.negativePoseDurationRatio ?? 0) * 100), 100), barCls, targetLabel: '10% 미만' };
+    case 'durationSec':
+      if (timeLimitSec > 0) return { barPct: Math.min(Math.round((dur2 / timeLimitSec) * 100), 100), barCls, targetLabel: '제한 시간의 90~100%' };
+      return { barPct: level * 33, barCls, targetLabel: '—' };
+    case 'speechRate': {
+      // 목표 범위 270~330, 범위 밖 거리 120자/분 이상이면 0%
+      const v = a2d.speechRate ?? 300;
+      const dist = Math.max(0, v - 330, 270 - v);
+      return { barPct: Math.max(0, Math.round(100 - dist / 1.2)), barCls, targetLabel: '270~330 자/분' };
+    }
+    case 'pitchVariation': {
+      // 목표 범위 70~90 Hz, 범위 밖 거리 60Hz 이상이면 0%
+      const v = a2d.pitchVariation ?? 75;
+      const dist = Math.max(0, v - 90, 70 - v);
+      return { barPct: Math.max(0, Math.round(100 - dist / 0.6)), barCls, targetLabel: '70~90 Hz' };
+    }
+    case 'lateSpeedRatio': {
+      // 목표 ±5% 이내, 편차 35% 이상이면 0%
+      const dev = Math.abs((a2d.lateSpeedRatio ?? 1.0) - 1.0) * 100;
+      const dist = Math.max(0, dev - 5);
+      return { barPct: Math.max(0, Math.round(100 - dist / 0.3)), barCls, targetLabel: '±5% 이내' };
+    }
+    default: return { barPct: level * 33, barCls, targetLabel: '' };
+  }
+}
+
+function getMetricNum(metricKey: string, data: any, dur: number): string {
+  switch (metricKey) {
+    case 'speechRate': return String(data.speechRate ?? 300);
+    case 'pitchVariation': return String(data.pitchVariation ?? 75);
+    case 'lateSpeedRatio': {
+      const dev = (data.lateSpeedRatio ?? 1.0) - 1.0;
+      const pct = Math.round(dev * 100);
+      return Math.abs(pct) <= 5 ? `±${Math.abs(pct)}` : `${pct > 0 ? '+' : ''}${pct}`;
+    }
+    case 'negativePoseDurationRatio': return `${Math.round((data.negativePoseDurationRatio ?? 0) * 100)}`;
+    case 'eyeContact': return `${data.eyeContact ?? 0}`;
+    case 'durationSec': {
+      const m = Math.floor(dur / 60), s = Math.floor(dur % 60);
+      return s > 0 ? `${m}분 ${String(s).padStart(2, '0')}초` : `${m}분`;
+    }
+    default: return '—';
+  }
+}
+
+function getMetricUnit(metricKey: string): string {
+  switch (metricKey) {
+    case 'speechRate': return '자/분';
+    case 'pitchVariation': return 'Hz';
+    case 'lateSpeedRatio': return '%';
+    case 'negativePoseDurationRatio': return '%';
+    case 'eyeContact': return '%';
+    default: return '';
+  }
+}
 
 // ── LLM 종합 의견 JSON 스펙 ────────────────────────────────────────────────────
 // 백엔드에서 이 구조의 JSON을 내려주면 됩니다.
@@ -187,33 +305,37 @@ function KPICompareCard({
 }) {
   const b1 = LEVEL_BADGE[level1];
   const b2 = LEVEL_BADGE[level2];
+  const headerBg = level2 === 3 ? 'bg-green-100' : 'bg-red-100';
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col p-3 gap-2 min-w-0">
-      {/* 라벨 + 상태 배지 */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-slate-500 truncate">{label}</p>
+    <div className="rounded-xl border border-slate-200 shadow-sm flex flex-col min-w-0 overflow-hidden">
+      {/* 컬러 헤더 */}
+      <div className={`flex items-center justify-between px-3 py-2.5 ${headerBg}`}>
+        <p className="text-sm font-semibold text-slate-700 truncate">{label}</p>
         <HeaderBadge level1={level1} level2={level2} />
       </div>
-      {/* 1회차 */}
-      <div className="flex items-end justify-between gap-1">
-        <div>
-          <p className="text-xs text-slate-400 mb-0.5">1회차</p>
-          <p className="text-2xl font-bold text-slate-700 leading-none">
-            {val1}<span className="text-sm font-normal text-slate-400 ml-1">{unit}</span>
-          </p>
+      {/* 내용 */}
+      <div className="bg-white flex flex-col gap-2 px-3 py-2.5">
+        {/* 1회차 */}
+        <div className="flex items-end justify-between gap-1">
+          <div>
+            <p className="text-xs text-slate-400 mb-0.5">1회차</p>
+            <p className="text-2xl font-bold text-slate-700 leading-none">
+              {val1}<span className="text-sm font-normal text-slate-400 ml-1">{unit}</span>
+            </p>
+          </div>
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${b1.cls}`}>{b1.label}</span>
         </div>
-        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${b1.cls}`}>{b1.label}</span>
-      </div>
-      <div className="border-t border-slate-100" />
-      {/* 2회차 */}
-      <div className="flex items-end justify-between gap-1">
-        <div>
-          <p className="text-xs text-slate-400 mb-0.5">2회차</p>
-          <p className="text-2xl font-bold text-slate-900 leading-none">
-            {val2}<span className="text-sm font-normal text-slate-400 ml-1">{unit}</span>
-          </p>
+        <div className="border-t border-slate-100" />
+        {/* 2회차 */}
+        <div className="flex items-end justify-between gap-1">
+          <div>
+            <p className="text-xs text-slate-400 mb-0.5">2회차</p>
+            <p className="text-2xl font-bold text-slate-900 leading-none">
+              {val2}<span className="text-sm font-normal text-slate-400 ml-1">{unit}</span>
+            </p>
+          </div>
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${b2.cls}`}>{b2.label}</span>
         </div>
-        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${b2.cls}`}>{b2.label}</span>
       </div>
     </div>
   );
@@ -546,29 +668,31 @@ export default function ComparisonPage() {
     const maintained = r2level === 3 && r1level === 3;
     switch (metricKey) {
       case 'speechRate':
-        if (maintained) return '청중이 듣기 좋은 속도를 유지했어요.';
-        if (improved) return '발화 속도가 적정 범위에 들어왔어요.';
-        return (a2data.speechRate ?? 300) > 330 ? '조금 천천히 말해보세요.' : '핵심 내용을 조금 더 빠르게 전달해보세요.';
+        if (maintained) return '적정 속도를 잘 유지했어요.';
+        if (improved) return '적정 속도에 들어왔어요.';
+        return (a2data.speechRate ?? 300) > 330 ? '조금 천천히 말해보세요.' : '조금 더 빠르게 말해보세요.';
       case 'pitchVariation':
         if (maintained) return '생동감 있는 발표였어요.';
         if (improved) return '목소리 변화가 자연스러워졌어요.';
-        return (a2data.pitchVariation ?? 75) < 70 ? '중요한 단어에서 목소리를 높여보세요.' : '주요 포인트 외에는 일정한 톤을 유지해보세요.';
+        return (a2data.pitchVariation ?? 75) < 70 ? '중요 단어에서 강조해보세요.' : '톤을 일정하게 유지해보세요.';
       case 'lateSpeedRatio':
-        if (maintained) return '발표 내내 일정한 속도를 유지했어요.';
-        if (improved) return '후반부 속도가 안정적으로 유지되었어요.';
-        return (a2data.lateSpeedRatio ?? 1.0) > 1.0 ? '마무리 부분에서 의식적으로 천천히 말해보세요.' : '후반부 핵심 내용을 짧게 요약해보세요.';
+        if (maintained) return '내내 일정한 속도였어요.';
+        if (improved) return '후반부 말속도가 안정됐어요.';
+        return (a2data.lateSpeedRatio ?? 1.0) > 1.0 ? '마무리에서 천천히 말해보세요.' : '후반부 속도 처짐을 의식해보세요.';
       case 'negativePoseDurationRatio':
-        if (maintained) return '안정적인 자세를 계속 유지했어요.';
-        if (improved) return '발표 중 흔들림이 크게 줄었어요.';
-        return '발표 전 바른 자세를 의식적으로 잡아보세요.';
+        if (maintained) return '안정적인 자세를 유지했어요.';
+        if (improved) return '발표 중 흔들림이 줄었어요.';
+        return '바른 자세를 의식적으로 잡아보세요.';
       case 'eyeContact':
         if (maintained) return '청중과 꾸준히 눈을 맞췄어요.';
-        if (improved) return '정면 응시가 눈에 띄게 늘었어요.';
-        return '카메라를 의식적으로 바라보는 연습을 해보세요.';
+        if (improved) return '정면 응시가 크게 늘었어요.';
+        return '카메라를 의식적으로 바라봐보세요.';
       case 'durationSec':
         if (maintained) return '제한 시간을 잘 지켰어요.';
-        if (improved) return '발표 시간이 적정 범위에 들어왔어요.';
-        return '핵심 내용을 압축해보세요.';
+        if (improved) return '적정 시간 범위에 들어왔어요.';
+        if (timeLimitSeconds <= 0) return '목표 시간을 먼저 설정해보세요.';
+        if (dur2 > timeLimitSeconds) return '핵심 내용을 압축해보세요.';
+        return '내용을 더 상세하게 전달해보세요.';
       default: return '';
     }
   };
@@ -576,6 +700,26 @@ export default function ComparisonPage() {
   const improvedItems   = fullChecklist.filter(({ r1, r2 }) => r2.level === 3 && r1.level < 3);
   const maintainedItems = fullChecklist.filter(({ r1, r2 }) => r2.level === 3 && r1.level === 3);
   const needsWorkItems  = fullChecklist.filter(({ r1, r2 }) => r2.level < 3);
+
+  const mockScript = (() => {
+    const parts: string[] = [];
+    if (improvedItems.length > 0) {
+      const labels = improvedItems.map(i => i.metric.label).join(', ');
+      parts.push(`2회차 발표에서 ${labels} 면에서 눈에 띄는 개선이 있었습니다.`);
+    } else {
+      parts.push('2회차 발표를 1회차와 비교 분석한 결과입니다.');
+    }
+    if (maintainedItems.length > 0) {
+      const labels = maintainedItems.map(i => i.metric.label).join(', ');
+      parts.push(`${labels}은(는) 두 회차 모두 적정 수준을 유지하며 꾸준한 강점을 보여줬습니다.`);
+    }
+    if (needsWorkItems.length > 0) {
+      const labels = needsWorkItems.map(i => i.metric.label).join(', ');
+      parts.push(`${labels} 부분은 아직 목표 수준에 미치지 못하고 있어 집중적인 연습이 필요합니다.`);
+    }
+    parts.push('꾸준한 반복 연습을 통해 발표 완성도를 높여보세요.');
+    return parts.join(' ');
+  })();
 
   const p1 = attempt1Data.pitchVariation ?? 75;
   const p2 = attempt2Data.pitchVariation ?? 75;
@@ -676,11 +820,7 @@ export default function ComparisonPage() {
             {/* 종합 의견 — LLM JSON → opinion state로 주입 */}
             <div className="p-5">
               <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-3">종합 의견</h3>
-              {opinion ? (
-                <p className="text-sm text-slate-700 leading-relaxed">{opinion.script}</p>
-              ) : (
-                <p className="text-sm text-slate-400 italic">종합 의견을 불러오는 중입니다...</p>
-              )}
+              <p className="text-sm text-slate-700 leading-relaxed">{opinion?.script ?? mockScript}</p>
             </div>
 
             <div className="border-t border-slate-100 mx-5" />
@@ -874,27 +1014,30 @@ export default function ComparisonPage() {
               <h3 className="text-lg font-bold text-slate-900 pl-3 border-l-4 border-blue-900 mb-4">개선 과제 비교</h3>
 
               {/* 전체 요약 */}
-              <div className="grid grid-cols-3 gap-3 mb-5">
-                <div className="bg-green-50 border border-green-200 rounded-xl py-4 flex flex-col items-center gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <CheckCircle className="w-4 h-4 text-green-600" />
-                    <p className="text-sm font-semibold text-green-600">개선됨</p>
+              <div className="grid grid-cols-3 gap-3 mb-6">
+                <div className="bg-green-50 border border-green-200 rounded-xl py-4 px-3 flex flex-col items-center gap-1.5">
+                  <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mb-0.5">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
                   </div>
                   <p className="text-3xl font-bold text-green-700">{improvedItems.length}</p>
+                  <p className="text-sm font-semibold text-green-600">개선됨</p>
+                  <p className="text-xs text-green-500 text-center">이전 대비 향상된 항목</p>
                 </div>
-                <div className="bg-red-50 border border-red-200 rounded-xl py-4 flex flex-col items-center gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <XCircle className="w-4 h-4 text-red-500" />
-                    <p className="text-sm font-semibold text-red-500">개선 필요</p>
+                <div className="bg-red-50 border border-red-200 rounded-xl py-4 px-3 flex flex-col items-center gap-1.5">
+                  <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mb-0.5">
+                    <XCircle className="w-5 h-5 text-red-500" />
                   </div>
                   <p className="text-3xl font-bold text-red-600">{needsWorkItems.length}</p>
+                  <p className="text-sm font-semibold text-red-500">개선 필요</p>
+                  <p className="text-xs text-red-400 text-center">보완이 필요한 항목</p>
                 </div>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl py-4 flex flex-col items-center gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-4 h-4 inline-flex items-center justify-center text-slate-400 font-bold leading-none">—</span>
-                    <p className="text-sm font-semibold text-slate-500">유지</p>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl py-4 px-3 flex flex-col items-center gap-1.5">
+                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mb-0.5">
+                    <span className="text-slate-400 font-bold text-lg leading-none">—</span>
                   </div>
                   <p className="text-3xl font-bold text-slate-600">{maintainedItems.length}</p>
+                  <p className="text-sm font-semibold text-slate-500">유지</p>
+                  <p className="text-xs text-slate-400 text-center">꾸준히 잘 하고 있는 항목</p>
                 </div>
               </div>
 
@@ -905,16 +1048,46 @@ export default function ComparisonPage() {
                     <CheckCircle className="w-4 h-4 text-green-600" />
                     <p className="text-sm font-bold text-green-700">개선된 점</p>
                   </div>
-                  <div className="space-y-2">
-                    {improvedItems.map(({ metric, r1, r2 }) => (
-                      <div key={metric.metric_key} className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
-                        <p className="text-xs font-bold text-green-700 mb-1">[{metric.label}]</p>
-                        <p className="text-sm font-bold text-slate-800 mb-0.5">
-                          {fmtMetricVal(metric.metric_key, a1d, dur1, timeLimitSeconds)} → {fmtMetricVal(metric.metric_key, a2d, dur2, timeLimitSeconds)}
-                        </p>
-                        <p className="text-xs text-slate-500">{getShortDesc(metric.metric_key, r1.level, r2.level, a2d)}</p>
-                      </div>
-                    ))}
+                  <div className="space-y-2.5">
+                    {improvedItems.map(({ metric, r1, r2 }) => {
+                      const badge = getMetricChangeBadge(metric.metric_key, a1d, a2d, dur1, dur2);
+                      const num1 = getMetricNum(metric.metric_key, a1d, dur1);
+                      const num2 = getMetricNum(metric.metric_key, a2d, dur2);
+                      const unit = getMetricUnit(metric.metric_key);
+                      const desc = getShortDesc(metric.metric_key, r1.level, r2.level, a2d);
+                      return (
+                        <div key={metric.metric_key} className="bg-green-50 border border-green-200 rounded-xl px-4 py-4 flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                            <MetricIconComp mk={metric.metric_key} cls="w-5 h-5 text-green-600" />
+                          </div>
+                          <div className="w-28 flex-shrink-0">
+                            <p className="text-sm font-bold text-slate-800">{metric.label}</p>
+                            <p className="text-xs text-slate-500 leading-tight mt-0.5 break-keep line-clamp-2">{desc}</p>
+                          </div>
+                          <div className="flex-1 flex items-center justify-center gap-2.5">
+                            <div className="flex flex-col items-center gap-1">
+                              <p className="text-sm font-medium text-slate-400 leading-none">
+                                {num1}{unit && <span className="text-xs font-normal text-slate-300 ml-0.5">{unit}</span>}
+                              </p>
+                              <p className="text-xs text-slate-300">1회차</p>
+                            </div>
+                            <span className="text-slate-300 text-sm flex-shrink-0">→</span>
+                            <div className="flex flex-col items-center gap-1">
+                              <p className="text-sm font-bold text-slate-800 leading-none">
+                                {num2}{unit && <span className="text-xs font-normal text-slate-500 ml-0.5">{unit}</span>}
+                              </p>
+                              <p className="text-xs text-slate-500">2회차</p>
+                            </div>
+                          </div>
+                          <div className="w-28 flex flex-col items-end gap-1.5 flex-shrink-0">
+                            <div className="bg-green-100 text-green-700 rounded-full px-2.5 py-1 inline-flex">
+                              <span className="text-xs font-bold leading-none">{badge.arrow}{badge.pct}% {badge.text}</span>
+                            </div>
+                            <p className="text-xs text-green-600 text-right leading-tight break-keep line-clamp-2">{desc}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -926,16 +1099,60 @@ export default function ComparisonPage() {
                     <XCircle className="w-4 h-4 text-red-500" />
                     <p className="text-sm font-bold text-red-600">개선 필요한 점</p>
                   </div>
-                  <div className="space-y-2">
-                    {needsWorkItems.map(({ metric, r1, r2 }) => (
-                      <div key={metric.metric_key} className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-                        <p className="text-xs font-bold text-red-600 mb-1">[{metric.label}]</p>
-                        <p className="text-sm font-bold text-slate-800 mb-0.5">
-                          {fmtMetricVal(metric.metric_key, a2d, dur2, timeLimitSeconds)}
-                        </p>
-                        <p className="text-xs text-slate-500">{getShortDesc(metric.metric_key, r1.level, r2.level, a2d)}</p>
-                      </div>
-                    ))}
+                  <div className="space-y-2.5">
+                    {needsWorkItems.map(({ metric, r1, r2 }) => {
+                      const { barPct, barCls, targetLabel } = getMetricProgress(metric.metric_key, a2d, dur2, timeLimitSeconds, r2.level);
+                      const isDur = metric.metric_key === 'durationSec';
+                      const num2 = getMetricNum(metric.metric_key, a2d, dur2);
+                      const unit = getMetricUnit(metric.metric_key);
+                      const desc = getShortDesc(metric.metric_key, r1.level, r2.level, a2d);
+                      return (
+                        <div key={metric.metric_key} className="bg-red-50 border border-red-200 rounded-xl px-4 py-4 flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                            <MetricIconComp mk={metric.metric_key} cls="w-5 h-5 text-red-500" />
+                          </div>
+                          <div className="w-28 flex-shrink-0">
+                            <p className="text-sm font-bold text-slate-800">{metric.label}</p>
+                            <p className="text-xs text-slate-500 leading-tight mt-0.5 break-keep line-clamp-2">{desc}</p>
+                          </div>
+                          {isDur ? (
+                            <div className="flex-1 flex items-center justify-center gap-2">
+                              <div className="flex flex-col items-center gap-1">
+                                <p className="text-sm font-bold text-slate-700 leading-none">{num2}</p>
+                                <p className="text-xs text-slate-400">현재 시간</p>
+                              </div>
+                              {timeLimitSeconds > 0 && (
+                                <>
+                                  <span className="text-slate-300 flex-shrink-0">/</span>
+                                  <div className="flex flex-col items-center gap-1">
+                                    <p className="text-sm font-medium text-slate-500 leading-none">{getMetricNum('durationSec', {}, timeLimitSeconds)}</p>
+                                    <p className="text-xs text-slate-400">제한 시간</p>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex-1 flex items-center justify-center">
+                              <div className="flex flex-col items-center gap-1">
+                                <p className="text-sm font-bold text-slate-700 leading-none">
+                                  {num2}{unit && <span className="text-xs font-normal text-slate-400 ml-0.5">{unit}</span>}
+                                </p>
+                                <p className="text-xs text-slate-400">현재 수준</p>
+                              </div>
+                            </div>
+                          )}
+                          <div className="w-28 flex flex-col items-end gap-1.5 flex-shrink-0">
+                            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                              <div className={`h-full rounded-full ${barCls}`} style={{ width: `${barPct}%`, minWidth: '4px' }} />
+                            </div>
+                            <p className={`text-xs font-semibold text-right ${r2.level === 2 ? 'text-orange-500' : 'text-red-500'}`}>
+                              {barPct}% {isDur ? '사용 중' : '수준'}
+                            </p>
+                            <p className="text-xs text-slate-400 text-right leading-tight break-keep">목표: {targetLabel}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -944,19 +1161,67 @@ export default function ComparisonPage() {
               {maintainedItems.length > 0 && (
                 <div className="mb-5">
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="w-4 h-4 inline-flex items-center justify-center text-slate-500 font-bold leading-none text-base">—</span>
+                    <span className="w-4 h-4 inline-flex items-center justify-center text-slate-500 font-bold text-base leading-none">—</span>
                     <p className="text-sm font-bold text-slate-600">잘 유지한 점</p>
                   </div>
-                  <div className="space-y-2">
-                    {maintainedItems.map(({ metric, r1, r2 }) => (
-                      <div key={metric.metric_key} className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
-                        <p className="text-xs font-bold text-slate-500 mb-1">[{metric.label}]</p>
-                        <p className="text-sm font-bold text-slate-800 mb-0.5">
-                          {fmtMetricVal(metric.metric_key, a2d, dur2, timeLimitSeconds)}
-                        </p>
-                        <p className="text-xs text-slate-500">{getShortDesc(metric.metric_key, r1.level, r2.level, a2d)}</p>
-                      </div>
-                    ))}
+                  <div className="space-y-2.5">
+                    {maintainedItems.map(({ metric, r1, r2 }) => {
+                      const num2 = getMetricNum(metric.metric_key, a2d, dur2);
+                      const unit = getMetricUnit(metric.metric_key);
+                      const desc = getShortDesc(metric.metric_key, r1.level, r2.level, a2d);
+                      const isEye = metric.metric_key === 'eyeContact';
+                      const eyePct = a2d.eyeContact ?? 0;
+                      const filledFull = isEye ? Math.floor(eyePct / 10) : 0;
+                      const hasHalf   = isEye && (eyePct % 10) >= 5;
+                      return (
+                        <div key={metric.metric_key} className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
+                            <MetricIconComp mk={metric.metric_key} cls="w-5 h-5 text-slate-500" />
+                          </div>
+                          <div className="w-28 flex-shrink-0">
+                            <p className="text-sm font-bold text-slate-800">{metric.label}</p>
+                            <p className="text-xs text-slate-500 leading-tight mt-0.5 break-keep line-clamp-2">{desc}</p>
+                          </div>
+                          <div className="flex-1 flex items-center justify-center">
+                            <div className="flex flex-col items-center gap-1">
+                              <p className="text-sm font-bold text-slate-700 leading-none">
+                                {num2}{unit && <span className="text-xs font-normal text-slate-400 ml-0.5">{unit}</span>}
+                              </p>
+                              <p className="text-xs text-slate-400">현재 수준</p>
+                            </div>
+                          </div>
+                          <div className={`flex flex-col items-end gap-1.5 flex-shrink-0${isEye ? '' : ' w-28'}`}>
+                            {isEye ? (
+                              <>
+                                <div className="flex gap-0.5 flex-nowrap">
+                                  {Array.from({ length: 10 }, (_, i) => {
+                                    if (i < filledFull) {
+                                      return <div key={i} className="w-3 h-3 rounded-full bg-blue-400" />;
+                                    }
+                                    if (i === filledFull && hasHalf) {
+                                      return (
+                                        <div key={i} className="relative w-3 h-3 rounded-full bg-slate-200 overflow-hidden">
+                                          <div className="absolute left-0 top-0 h-full w-1/2 bg-blue-400" />
+                                        </div>
+                                      );
+                                    }
+                                    return <div key={i} className="w-3 h-3 rounded-full bg-slate-200" />;
+                                  })}
+                                </div>
+                                <p className="text-xs text-slate-500 text-right leading-tight whitespace-nowrap">{desc}</p>
+                              </>
+                            ) : (
+                              <>
+                                <div className="bg-slate-100 text-slate-500 rounded-full px-2.5 py-1">
+                                  <span className="text-xs font-bold leading-none">✓ 적정 유지</span>
+                                </div>
+                                <p className="text-xs text-slate-400 text-right leading-tight break-keep line-clamp-2">{desc}</p>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
