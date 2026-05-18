@@ -57,7 +57,7 @@ function getMetricChangeBadge(
     case 'eyeContact': {
       const v1 = a1d.eyeContact ?? 0, v2 = a2d.eyeContact ?? 0;
       const diff = v2 - v1;
-      return { arrow: diff >= 0 ? '↑' : '↓', pct: Math.abs(diff), text: diff >= 0 ? '증가' : '감소' };
+      return { arrow: diff >= 0 ? '↑' : '↓', pct: Math.round(Math.abs(diff)), text: diff >= 0 ? '증가' : '감소' };
     }
     case 'lateSpeedRatio': {
       const d1 = Math.abs((a1d.lateSpeedRatio ?? 1.0) - 1.0) * 100;
@@ -562,12 +562,21 @@ export default function ComparisonPage() {
   const refiner1: RefinerResult = (attempt1.analysisResults as any)?.refinerResult ?? (mockRefinerResult1 as unknown as RefinerResult);
   const refiner2: RefinerResult = (attempt2.analysisResults as any)?.refinerResult ?? (mockRefinerResult2 as unknown as RefinerResult);
 
+  const gaze1: GazeResult = (attempt1.analysisResults as any)?.gazeResult ?? (mockGazeResult1 as unknown as GazeResult);
+  const gaze2: GazeResult = (attempt2.analysisResults as any)?.gazeResult ?? (mockGazeResult2 as unknown as GazeResult);
+  const gazeGrid1 = gaze1.gaze_metrics.grid_percent;
+  const gazeGrid2 = gaze2.gaze_metrics.grid_percent;
+
+  const gazeEye1 = Math.round(gazeGrid1[1][1] * 10) / 10;
+  const gazeEye2 = Math.round(gazeGrid2[1][1] * 10) / 10;
+
   const attempt1Data = {
     ...(attempt1.analysisResults ?? {
       speechRate: 360, eyeContact: 78, duration: '8:30',
       pitchVariation: 75, lateSpeedRatio: 1.05,
     }),
     negativePoseDurationRatio: refiner1.refined_result.details.negative_posture_analysis.negative_posture_duration_ratio,
+    eyeContact: gazeEye1,
   };
   const attempt2Data = {
     ...(attempt2.analysisResults ?? {
@@ -575,6 +584,7 @@ export default function ComparisonPage() {
       pitchVariation: 80, lateSpeedRatio: 1.02,
     }),
     negativePoseDurationRatio: refiner2.refined_result.details.negative_posture_analysis.negative_posture_duration_ratio,
+    eyeContact: gazeEye2,
   };
 
   const attempt1Seconds = durationToSeconds(attempt1Data.duration);
@@ -585,13 +595,6 @@ export default function ComparisonPage() {
   const dur1 = video1Duration != null ? Math.round(video1Duration) : attempt1Seconds;
   const dur2 = video2Duration != null ? Math.round(video2Duration) : attempt2Seconds;
 
-  const gaze1: GazeResult = (attempt1.analysisResults as any)?.gazeResult ?? (mockGazeResult1 as unknown as GazeResult);
-  const gaze2: GazeResult = (attempt2.analysisResults as any)?.gazeResult ?? (mockGazeResult2 as unknown as GazeResult);
-  const gazeGrid1 = gaze1.gaze_metrics.grid_percent;
-  const gazeGrid2 = gaze2.gaze_metrics.grid_percent;
-
-  const gazeEye1 = Math.round(gazeGrid1[1][1] * 10) / 10;
-  const gazeEye2 = Math.round(gazeGrid2[1][1] * 10) / 10;
   const gazeEyeDiff = Math.round((gazeEye2 - gazeEye1) * 10) / 10;
 
   const gazeOffDir1 = dominantOffCenter(gazeGrid1);
